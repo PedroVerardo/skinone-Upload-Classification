@@ -1,0 +1,21 @@
+[project]
+name = "skin-one-back"
+version = "0.1.0"
+description = "backend for skin one dataset classification"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    "django",
+    "djangorestframework",
+    "django-cors-headers",
+    "django-filter",
+    "gunicorn",
+    "psycopg2-binary",
+    "python-dotenv",
+    "Pillow",
+    "drf-yasg",
+    "django-environ",
+    "google-auth",
+    "google-auth-oauthlib",
+    "google-auth-httplib2",
+]
