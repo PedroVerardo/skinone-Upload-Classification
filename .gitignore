@@ -9,3 +9,7 @@ wheels/
 # Virtual environments
 .venv
 uv.lock
+
+debug.log
+*.sqlite3
+.DS_Store
