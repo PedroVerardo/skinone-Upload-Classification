@@ -1,0 +1,347 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Teste de Upload de Imagens</title>
+    {% load static %}
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        .upload-area {
+            border: 2px dashed #ddd;
+            border-radius: 10px;
+            padding: 40px;
+            text-align: center;
+            margin: 20px 0;
+            transition: border-color 0.3s;
+        }
+        .upload-area:hover {
+            border-color: #007bff;
+        }
+        .upload-area.dragover {
+            border-color: #007bff;
+            background-color: #f8f9fa;
+        }
+        input[type="file"] {
+            display: none;
+        }
+        .btn {
+            background-color: #007bff;
+            color: white;
+            padding: 10px 20px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            margin: 5px;
+        }
+        .btn:hover {
+            background-color: #0056b3;
+        }
+        .btn:disabled {
+            background-color: #6c757d;
+            cursor: not-allowed;
+        }
+        .result {
+            margin-top: 20px;
+            padding: 15px;
+            border-radius: 5px;
+        }
+        .success {
+            background-color: #d4edda;
+            border: 1px solid #c3e6cb;
+            color: #155724;
+        }
+        .error {
+            background-color: #f8d7da;
+            border: 1px solid #f5c6cb;
+            color: #721c24;
+        }
+        .progress {
+            width: 100%;
+            height: 20px;
+            background-color: #e9ecef;
+            border-radius: 10px;
+            overflow: hidden;
+            margin: 10px 0;
+        }
+        .progress-bar {
+            height: 100%;
+            background-color: #007bff;
+            width: 0%;
+            transition: width 0.3s;
+        }
+        .image-list {
+            margin-top: 30px;
+        }
+        .image-item {
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            padding: 15px;
+            margin: 10px 0;
+            background: #f8f9fa;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🖼️ Teste de Upload de Imagens</h1>
+        
+        <div class="upload-section">
+            <div class="upload-area" id="uploadArea">
+                <p>📁 Arraste uma imagem aqui ou clique para selecionar</p>
+                <button class="btn" onclick="document.getElementById('fileInput').click()">
+                    Selecionar Imagem
+                </button>
+                <input type="file" id="fileInput" accept="image/*" onchange="handleFileSelect(this.files)">
+            </div>
+            
+            <div>
+                <label for="userIdInput">ID do Usuário (opcional):</label>
+                <input type="number" id="userIdInput" placeholder="Ex: 1">
+            </div>
+            
+            <div style="margin-top: 20px;">
+                <button class="btn" onclick="uploadImage()" id="uploadBtn" disabled>
+                    📤 Fazer Upload
+                </button>
+                <button class="btn" onclick="listImages()">
+                    📋 Listar Imagens
+                </button>
+            </div>
+            
+            <div class="progress" id="progressContainer" style="display: none;">
+                <div class="progress-bar" id="progressBar"></div>
+            </div>
+            
+            <div id="result"></div>
+        </div>
+        
+        <div class="image-list" id="imageList"></div>
+    </div>
+
+    <script>
+        let selectedFile = null;
+        const API_BASE = '/api/images';
+        
+        // Get CSRF token from cookie
+        function getCookie(name) {
+            let cookieValue = null;
+            if (document.cookie && document.cookie !== '') {
+                const cookies = document.cookie.split(';');
+                for (let i = 0; i < cookies.length; i++) {
+                    const cookie = cookies[i].trim();
+                    if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                        cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                        break;
+                    }
+                }
+            }
+            return cookieValue;
+        }
+        
+        const csrftoken = getCookie('csrftoken');
+
+        // Configurar área de drag and drop
+        const uploadArea = document.getElementById('uploadArea');
+        
+        uploadArea.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            uploadArea.classList.add('dragover');
+        });
+        
+        uploadArea.addEventListener('dragleave', () => {
+            uploadArea.classList.remove('dragover');
+        });
+        
+        uploadArea.addEventListener('drop', (e) => {
+            e.preventDefault();
+            uploadArea.classList.remove('dragover');
+            handleFileSelect(e.dataTransfer.files);
+        });
+        
+        function handleFileSelect(files) {
+            if (files.length > 0) {
+                selectedFile = files[0];
+                
+                // Validar tipo de arquivo
+                if (!selectedFile.type.startsWith('image/')) {
+                    showResult('Erro: Por favor, selecione um arquivo de imagem.', 'error');
+                    return;
+                }
+                
+                // Validar tamanho (max 10MB)
+                if (selectedFile.size > 10 * 1024 * 1024) {
+                    showResult('Erro: Arquivo muito grande. Máximo permitido: 10MB.', 'error');
+                    return;
+                }
+                
+                document.getElementById('uploadBtn').disabled = false;
+                showResult(`Arquivo selecionado: ${selectedFile.name} (${formatFileSize(selectedFile.size)})`, 'success');
+            }
+        }
+        
+        function uploadImage() {
+            if (!selectedFile) {
+                showResult('Erro: Nenhum arquivo selecionado.', 'error');
+                return;
+            }
+            
+            const formData = new FormData();
+            formData.append('image', selectedFile);
+            
+            const userId = document.getElementById('userIdInput').value;
+            if (userId) {
+                formData.append('user_id', userId);
+            }
+            
+            const uploadBtn = document.getElementById('uploadBtn');
+            uploadBtn.disabled = true;
+            uploadBtn.textContent = '⏳ Fazendo Upload...';
+            
+            showProgress(0);
+            
+            const xhr = new XMLHttpRequest();
+            
+            xhr.upload.addEventListener('progress', (e) => {
+                if (e.lengthComputable) {
+                    const percentComplete = (e.loaded / e.total) * 100;
+                    showProgress(percentComplete);
+                }
+            });
+            
+            xhr.onload = function() {
+                hideProgress();
+                uploadBtn.disabled = false;
+                uploadBtn.textContent = '📤 Fazer Upload';
+                
+                if (xhr.status === 200) {
+                    const response = JSON.parse(xhr.responseText);
+                    if (response.success) {
+                        let message = `✅ Upload realizado com sucesso!<br>
+                                      ID: ${response.image_id}<br>
+                                      Hash: ${response.file_hash}<br>
+                                      Tamanho: ${formatFileSize(response.file_size)}`;
+                        
+                        if (response.duplicate) {
+                            message += '<br>⚠️ Esta imagem já existia no sistema.';
+                        }
+                        
+                        showResult(message, 'success');
+                        selectedFile = null;
+                        document.getElementById('uploadBtn').disabled = true;
+                        document.getElementById('fileInput').value = '';
+                        
+                        // Refresh image list
+                        listImages();
+                    } else {
+                        showResult(`❌ Erro: ${response.error}`, 'error');
+                    }
+                } else {
+                    showResult(`❌ Erro HTTP ${xhr.status}: ${xhr.responseText}`, 'error');
+                }
+            };
+            
+            xhr.onerror = function() {
+                hideProgress();
+                uploadBtn.disabled = false;
+                uploadBtn.textContent = '📤 Fazer Upload';
+                showResult('❌ Erro de conexão. Verifique se o servidor está rodando.', 'error');
+            };
+            
+            xhr.open('POST', `${API_BASE}/upload/`);
+            xhr.send(formData);
+        }
+        
+        function listImages() {
+            const userId = document.getElementById('userIdInput').value;
+            let url = `${API_BASE}/list/?limit=20`;
+            
+            if (userId) {
+                url += `&user_id=${userId}`;
+            }
+            
+            fetch(url)
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        displayImageList(data.images, data.total_count);
+                    } else {
+                        showResult(`❌ Erro ao listar: ${data.error}`, 'error');
+                    }
+                })
+                .catch(error => {
+                    showResult('❌ Erro de conexão ao listar imagens.', 'error');
+                });
+        }
+        
+        function displayImageList(images, totalCount) {
+            const imageList = document.getElementById('imageList');
+            
+            if (images.length === 0) {
+                imageList.innerHTML = '<h3>📋 Nenhuma imagem encontrada</h3>';
+                return;
+            }
+            
+            let html = `<h3>📋 Lista de Imagens (Total: ${totalCount})</h3>`;
+            
+            images.forEach(img => {
+                html += `
+                    <div class="image-item">
+                        <strong>ID:</strong> ${img.id}<br>
+                        <strong>Nome:</strong> ${img.original_filename}<br>
+                        <strong>Tamanho:</strong> ${formatFileSize(img.file_size)}<br>
+                        <strong>Hash:</strong> ${img.file_hash}<br>
+                        <strong>Upload por:</strong> ${img.uploaded_by || 'Anônimo'}<br>
+                        <strong>Data:</strong> ${new Date(img.uploaded_at).toLocaleString('pt-BR')}
+                    </div>
+                `;
+            });
+            
+            imageList.innerHTML = html;
+        }
+        
+        function showResult(message, type) {
+            const result = document.getElementById('result');
+            result.innerHTML = message;
+            result.className = `result ${type}`;
+            result.style.display = 'block';
+        }
+        
+        function showProgress(percent) {
+            const container = document.getElementById('progressContainer');
+            const bar = document.getElementById('progressBar');
+            container.style.display = 'block';
+            bar.style.width = percent + '%';
+        }
+        
+        function hideProgress() {
+            document.getElementById('progressContainer').style.display = 'none';
+        }
+        
+        function formatFileSize(bytes) {
+            if (bytes === 0) return '0 Bytes';
+            const k = 1024;
+            const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+            const i = Math.floor(Math.log(bytes) / Math.log(k));
+            return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+        }
+        
+        // Carregar lista de imagens ao iniciar
+        window.onload = function() {
+            listImages();
+        };
+    </script>
+</body>
+</html>

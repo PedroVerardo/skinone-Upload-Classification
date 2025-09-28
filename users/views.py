@@ -100,10 +100,6 @@ def validate_email_format(email):
     return True, "Valid email format"
 
 def validate_password_strength(password):
-    """
-    Validate password strength
-    Returns tuple: (is_valid, error_message)
-    """
     if not password:
         return False, "Password is required"
     
@@ -167,6 +163,23 @@ def verify_email_password(request):
         
     except Exception as e:
         logger.error(f"Unexpected error in email/password verification: {e}")
+        return JsonResponse({
+            'success': False,
+            'error': 'Internal server error'
+        }, status=500)
+
+@csrf_exempt
+@require_http_methods(["GET"])
+def get_all_users(request):
+    try:
+        users = User.objects.all().values('id', 'email', 'is_active', 'is_staff', 'date_joined')
+        users_list = list(users)
+        return JsonResponse({
+            'success': True,
+            'users': users_list
+        })
+    except Exception as e:
+        logger.error(f"Unexpected error in fetching all users: {e}")
         return JsonResponse({
             'success': False,
             'error': 'Internal server error'
