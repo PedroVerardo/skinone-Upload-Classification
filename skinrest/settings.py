@@ -48,6 +48,7 @@ MIDDLEWARE = [
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
+    'users.middleware.JWTAuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
 ]
@@ -114,30 +115,19 @@ USE_I18N = True
 USE_TZ = True
 
 
-# Static files (CSS, JavaScript, Images)
-# https://docs.djangoproject.com/en/5.2/howto/static-files/
-
 STATIC_URL = 'static/'
 
-# Media files (uploaded files)
 MEDIA_URL = '/media/'
 MEDIA_ROOT = BASE_DIR / 'media'
 
-# Images upload directory
 IMAGES_UPLOAD_DIR = 'images'
-
-# Default primary key field type
-# https://docs.djangoproject.com/en/5.2/ref/settings/#default-auto-field
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
-# Custom User Model
 AUTH_USER_MODEL = 'users.User'
 
-# Google OAuth Settings
-GOOGLE_CLIENT_ID = 'your-google-client-id-here'  # Replace with your actual Google Client ID
+GOOGLE_CLIENT_ID = 'your-google-client-id-here'
 
-# Logging Configuration
 LOGGING = {
     'version': 1,
     'disable_existing_loggers': False,
@@ -160,3 +150,8 @@ LOGGING = {
         },
     },
 }
+
+# JWT Configuration
+JWT_SECRET_KEY = SECRET_KEY  # You should use a different secret in production
+JWT_ACCESS_TOKEN_LIFETIME = 24  # Hours
+JWT_REFRESH_TOKEN_LIFETIME = 7  # Days

@@ -4,6 +4,9 @@ from . import views
 app_name = 'users'
 
 urlpatterns = [
+    path('', views.auth_page, name='auth_page'),  # HTML auth page
     path('verify-email-password/', views.verify_email_password, name='verify_email_password'),
-    # path('verify-google-sso/', views.verify_google_sso, name='verify_google_sso'),  # TODO: Implement this view
+    path('register/', views.register_user, name='register_user'),
+    path('login/', views.login_user, name='login_user'),
+    path('verify-token/', views.verify_token, name='verify_token'),
 ]

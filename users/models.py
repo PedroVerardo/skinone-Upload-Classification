@@ -27,12 +27,13 @@ class CustomUserManager(BaseUserManager):
 # Create your models here.
 class User(AbstractUser):
     email = models.EmailField(unique=True)
-    username = None  # Remove username field
-    
-    objects = CustomUserManager()
-    
+    sigla_estado = models.CharField(max_length=2, blank=True, null=True)
+    corem_number = models.CharField(max_length=20, blank=True, null=True)
+    username = None
     USERNAME_FIELD = 'email'
     REQUIRED_FIELDS = []
+    
+    objects = CustomUserManager()
 
     def __str__(self):
         return self.email

@@ -1,0 +1,745 @@
+<!DOCTYPE html>
+{% load static %}
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Upload de Imagens com JWT</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 1000px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            margin-bottom: 20px;
+        }
+        .auth-section {
+            background: #e3f2fd;
+            padding: 20px;
+            border-radius: 5px;
+            margin-bottom: 20px;
+        }
+        .upload-section {
+            background: #f8f9fa;
+            padding: 20px;
+            border-radius: 5px;
+            margin-bottom: 20px;
+        }
+        .form-group {
+            margin-bottom: 15px;
+        }
+        label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: bold;
+        }
+        input[type="email"], input[type="password"], input[type="text"] {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            box-sizing: border-box;
+        }
+        .upload-area {
+            border: 2px dashed #ddd;
+            border-radius: 10px;
+            padding: 40px;
+            text-align: center;
+            margin: 20px 0;
+            transition: border-color 0.3s;
+        }
+        .upload-area:hover {
+            border-color: #007bff;
+        }
+        .upload-area.dragover {
+            border-color: #007bff;
+            background-color: #f8f9fa;
+        }
+        input[type="file"] {
+            display: none;
+        }
+        .btn {
+            background-color: #007bff;
+            color: white;
+            padding: 10px 20px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            margin: 5px;
+        }
+        .btn:hover {
+            background-color: #0056b3;
+        }
+        .btn:disabled {
+            background-color: #6c757d;
+            cursor: not-allowed;
+        }
+        .btn-success {
+            background-color: #28a745;
+        }
+        .btn-success:hover {
+            background-color: #218838;
+        }
+        .btn-warning {
+            background-color: #ffc107;
+            color: #212529;
+        }
+        .btn-warning:hover {
+            background-color: #e0a800;
+        }
+        .result {
+            margin-top: 20px;
+            padding: 15px;
+            border-radius: 5px;
+        }
+        .success {
+            background-color: #d4edda;
+            border: 1px solid #c3e6cb;
+            color: #155724;
+        }
+        .error {
+            background-color: #f8d7da;
+            border: 1px solid #f5c6cb;
+            color: #721c24;
+        }
+        .warning {
+            background-color: #fff3cd;
+            border: 1px solid #ffeaa7;
+            color: #856404;
+        }
+        .progress {
+            width: 100%;
+            height: 20px;
+            background-color: #e9ecef;
+            border-radius: 10px;
+            overflow: hidden;
+            margin: 10px 0;
+        }
+        .progress-bar {
+            height: 100%;
+            background-color: #007bff;
+            width: 0%;
+            transition: width 0.3s;
+        }
+        .image-list {
+            margin-top: 30px;
+        }
+        .image-item {
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            padding: 15px;
+            margin: 10px 0;
+            background: #f8f9fa;
+        }
+        .auth-status {
+            padding: 10px;
+            border-radius: 5px;
+            margin-bottom: 10px;
+        }
+        .authenticated {
+            background-color: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+        .not-authenticated {
+            background-color: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+        .batch-upload {
+            background: #e8f5e8;
+            padding: 20px;
+            border-radius: 5px;
+            margin-top: 20px;
+        }
+        .base64-upload {
+            background: #fff8e1;
+            padding: 20px;
+            border-radius: 5px;
+            margin-top: 20px;
+        }
+        textarea {
+            width: 100%;
+            height: 100px;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            box-sizing: border-box;
+            font-family: monospace;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔐 Upload de Imagens com Autenticação JWT</h1>
+        
+        <!-- Auth Status -->
+        <div id="authStatus" class="auth-status not-authenticated">
+            ❌ Não autenticado - Faça login para usar o upload
+        </div>
+        
+        <!-- Authentication Section -->
+        <div class="auth-section">
+            <h2>🔑 Autenticação</h2>
+            <div id="loginForm">
+                <div class="form-group">
+                    <label for="loginEmail">Email:</label>
+                    <input type="email" id="loginEmail" placeholder="seu@email.com">
+                </div>
+                <div class="form-group">
+                    <label for="loginPassword">Senha:</label>
+                    <input type="password" id="loginPassword" placeholder="sua senha">
+                </div>
+                <button class="btn" onclick="loginUser()">🔐 Fazer Login</button>
+                <button class="btn btn-warning" onclick="registerUser()">📝 Registrar</button>
+            </div>
+            
+            <div id="authInfo" style="display: none;">
+                <p><strong>Usuário logado:</strong> <span id="userEmail"></span></p>
+                <button class="btn btn-warning" onclick="logout()">🚪 Logout</button>
+            </div>
+        </div>
+        
+        <!-- Upload Section -->
+        <div class="upload-section" id="uploadSection" style="display: none;">
+            <h2>📤 Upload de Imagens</h2>
+            
+            <!-- Single Upload -->
+            <h3>Upload Individual</h3>
+            <div class="upload-area" id="uploadArea">
+                <p>📁 Arraste uma imagem aqui ou clique para selecionar</p>
+                <button class="btn" onclick="document.getElementById('fileInput').click()">
+                    Selecionar Imagem
+                </button>
+                <input type="file" id="fileInput" accept="image/*" onchange="handleFileSelect(this.files)">
+            </div>
+            
+            <button class="btn" onclick="uploadSingleImage()" id="uploadBtn" disabled>
+                📤 Fazer Upload
+            </button>
+            
+            <!-- Batch Upload -->
+            <div class="batch-upload">
+                <h3>🗂️ Upload em Lote (Múltiplas Imagens)</h3>
+                <div class="upload-area" id="batchUploadArea">
+                    <p>📁 Arraste múltiplas imagens aqui ou clique para selecionar</p>
+                    <button class="btn" onclick="document.getElementById('batchFileInput').click()">
+                        Selecionar Múltiplas Imagens
+                    </button>
+                    <input type="file" id="batchFileInput" accept="image/*" multiple onchange="handleBatchFileSelect(this.files)">
+                </div>
+                
+                <div id="batchFileList"></div>
+                
+                <button class="btn btn-success" onclick="uploadBatchImages()" id="batchUploadBtn" disabled>
+                    📤 Upload em Lote
+                </button>
+            </div>
+            
+            <!-- Base64 Upload -->
+            <div class="base64-upload">
+                <h3>🔢 Upload Base64</h3>
+                <div class="form-group">
+                    <label for="base64Input">Dados Base64 da Imagem:</label>
+                    <textarea id="base64Input" placeholder="Cole aqui os dados base64 da imagem (com ou sem prefixo data:image/...)"></textarea>
+                </div>
+                <div class="form-group">
+                    <label for="base64Filename">Nome do Arquivo (opcional):</label>
+                    <input type="text" id="base64Filename" placeholder="imagem.jpg">
+                </div>
+                
+                <button class="btn btn-warning" onclick="uploadBase64Image()" id="base64UploadBtn">
+                    📤 Upload Base64
+                </button>
+            </div>
+            
+            <div class="progress" id="progressContainer" style="display: none;">
+                <div class="progress-bar" id="progressBar"></div>
+            </div>
+            
+            <div id="result"></div>
+        </div>
+        
+        <!-- Controls -->
+        <div class="container" id="controlsSection" style="display: none;">
+            <button class="btn btn-success" onclick="listImages()">
+                📋 Listar Imagens
+            </button>
+        </div>
+        
+        <div class="image-list" id="imageList"></div>
+    </div>
+
+    <script>
+        let selectedFiles = [];
+        let batchFiles = [];
+        let authToken = localStorage.getItem('authToken') || null;
+        const API_BASE = '/api/images';
+        const AUTH_API = '/api/auth';
+
+        // Initialize page
+        window.onload = function() {
+            checkAuthStatus();
+            setupDragAndDrop();
+        };
+
+        function checkAuthStatus() {
+            if (authToken) {
+                // Verify token with server
+                fetch(`${AUTH_API}/verify-token/`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ token: authToken })
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        showAuthenticated(data.user);
+                        listImages();
+                    } else {
+                        showNotAuthenticated();
+                        localStorage.removeItem('authToken');
+                        authToken = null;
+                    }
+                })
+                .catch(() => {
+                    showNotAuthenticated();
+                    localStorage.removeItem('authToken');
+                    authToken = null;
+                });
+            } else {
+                showNotAuthenticated();
+            }
+        }
+
+        function showAuthenticated(user) {
+            document.getElementById('authStatus').className = 'auth-status authenticated';
+            document.getElementById('authStatus').innerHTML = `✅ Autenticado como: ${user.email}`;
+            document.getElementById('loginForm').style.display = 'none';
+            document.getElementById('authInfo').style.display = 'block';
+            document.getElementById('userEmail').textContent = user.email;
+            document.getElementById('uploadSection').style.display = 'block';
+            document.getElementById('controlsSection').style.display = 'block';
+        }
+
+        function showNotAuthenticated() {
+            document.getElementById('authStatus').className = 'auth-status not-authenticated';
+            document.getElementById('authStatus').innerHTML = '❌ Não autenticado - Faça login para usar o upload';
+            document.getElementById('loginForm').style.display = 'block';
+            document.getElementById('authInfo').style.display = 'none';
+            document.getElementById('uploadSection').style.display = 'none';
+            document.getElementById('controlsSection').style.display = 'none';
+        }
+
+        function loginUser() {
+            const email = document.getElementById('loginEmail').value;
+            const password = document.getElementById('loginPassword').value;
+
+            if (!email || !password) {
+                showResult('Por favor, preencha email e senha', 'error');
+                return;
+            }
+
+            fetch(`${AUTH_API}/login/`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ email, password })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    authToken = data.tokens.access_token;
+                    localStorage.setItem('authToken', authToken);
+                    showAuthenticated(data.user);
+                    showResult('Login realizado com sucesso!', 'success');
+                    listImages();
+                } else {
+                    showResult(`Erro no login: ${data.error}`, 'error');
+                }
+            })
+            .catch(error => {
+                showResult('Erro de conexão no login', 'error');
+            });
+        }
+
+        function registerUser() {
+            const email = document.getElementById('loginEmail').value;
+            const password = document.getElementById('loginPassword').value;
+
+            if (!email || !password) {
+                showResult('Por favor, preencha email e senha', 'error');
+                return;
+            }
+
+            fetch(`${AUTH_API}/register/`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ email, password })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    authToken = data.tokens.access_token;
+                    localStorage.setItem('authToken', authToken);
+                    showAuthenticated(data.user);
+                    showResult('Usuário registrado e logado com sucesso!', 'success');
+                    listImages();
+                } else {
+                    showResult(`Erro no registro: ${data.error}`, 'error');
+                }
+            })
+            .catch(error => {
+                showResult('Erro de conexão no registro', 'error');
+            });
+        }
+
+        function logout() {
+            authToken = null;
+            localStorage.removeItem('authToken');
+            showNotAuthenticated();
+            showResult('Logout realizado com sucesso', 'success');
+            document.getElementById('imageList').innerHTML = '';
+        }
+
+        function setupDragAndDrop() {
+            // Single upload drag and drop
+            const uploadArea = document.getElementById('uploadArea');
+            uploadArea.addEventListener('dragover', (e) => {
+                e.preventDefault();
+                uploadArea.classList.add('dragover');
+            });
+            uploadArea.addEventListener('dragleave', () => {
+                uploadArea.classList.remove('dragover');
+            });
+            uploadArea.addEventListener('drop', (e) => {
+                e.preventDefault();
+                uploadArea.classList.remove('dragover');
+                handleFileSelect(e.dataTransfer.files);
+            });
+
+            // Batch upload drag and drop
+            const batchUploadArea = document.getElementById('batchUploadArea');
+            batchUploadArea.addEventListener('dragover', (e) => {
+                e.preventDefault();
+                batchUploadArea.classList.add('dragover');
+            });
+            batchUploadArea.addEventListener('dragleave', () => {
+                batchUploadArea.classList.remove('dragover');
+            });
+            batchUploadArea.addEventListener('drop', (e) => {
+                e.preventDefault();
+                batchUploadArea.classList.remove('dragover');
+                handleBatchFileSelect(e.dataTransfer.files);
+            });
+        }
+
+        function handleFileSelect(files) {
+            if (files.length > 0) {
+                selectedFiles = [files[0]];
+                const file = files[0];
+                
+                if (!file.type.startsWith('image/')) {
+                    showResult('Erro: Por favor, selecione um arquivo de imagem.', 'error');
+                    return;
+                }
+                
+                if (file.size > 10 * 1024 * 1024) {
+                    showResult('Erro: Arquivo muito grande. Máximo permitido: 10MB.', 'error');
+                    return;
+                }
+                
+                document.getElementById('uploadBtn').disabled = false;
+                showResult(`Arquivo selecionado: ${file.name} (${formatFileSize(file.size)})`, 'success');
+            }
+        }
+
+        function handleBatchFileSelect(files) {
+            batchFiles = Array.from(files);
+            
+            if (batchFiles.length === 0) {
+                document.getElementById('batchUploadBtn').disabled = true;
+                return;
+            }
+
+            if (batchFiles.length > 20) {
+                showResult('Erro: Máximo 20 arquivos por lote.', 'error');
+                batchFiles = batchFiles.slice(0, 20);
+            }
+
+            let validFiles = 0;
+            let html = '<h4>Arquivos selecionados:</h4><ul>';
+            
+            batchFiles.forEach((file, index) => {
+                const isValid = file.type.startsWith('image/') && file.size <= 10 * 1024 * 1024;
+                validFiles += isValid ? 1 : 0;
+                
+                html += `<li>${file.name} (${formatFileSize(file.size)}) 
+                        ${isValid ? '✅' : '❌ Inválido'}</li>`;
+            });
+            
+            html += '</ul>';
+            document.getElementById('batchFileList').innerHTML = html;
+            document.getElementById('batchUploadBtn').disabled = validFiles === 0;
+            
+            showResult(`${validFiles} de ${batchFiles.length} arquivos válidos selecionados`, 
+                      validFiles > 0 ? 'success' : 'error');
+        }
+
+        function uploadSingleImage() {
+            if (selectedFiles.length === 0) {
+                showResult('Erro: Nenhum arquivo selecionado.', 'error');
+                return;
+            }
+
+            const formData = new FormData();
+            formData.append('image', selectedFiles[0]);
+
+            uploadWithProgress(`${API_BASE}/upload/`, formData, 'uploadBtn', '📤 Fazer Upload');
+        }
+
+        function uploadBatchImages() {
+            if (batchFiles.length === 0) {
+                showResult('Erro: Nenhum arquivo selecionado.', 'error');
+                return;
+            }
+
+            const formData = new FormData();
+            batchFiles.forEach(file => {
+                formData.append('images', file);
+            });
+
+            uploadWithProgress(`${API_BASE}/upload/batch/`, formData, 'batchUploadBtn', '📤 Upload em Lote');
+        }
+
+        function uploadBase64Image() {
+            const base64Data = document.getElementById('base64Input').value.trim();
+            const filename = document.getElementById('base64Filename').value.trim() || 'uploaded_image.jpg';
+
+            if (!base64Data) {
+                showResult('Erro: Por favor, cole os dados base64 da imagem.', 'error');
+                return;
+            }
+
+            const data = {
+                image_data: base64Data,
+                filename: filename
+            };
+
+            const btn = document.getElementById('base64UploadBtn');
+            btn.disabled = true;
+            btn.textContent = '⏳ Fazendo Upload...';
+
+            fetch(`${API_BASE}/upload/base64/`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${authToken}`
+                },
+                body: JSON.stringify(data)
+            })
+            .then(response => response.json())
+            .then(data => {
+                btn.disabled = false;
+                btn.textContent = '📤 Upload Base64';
+
+                if (data.success) {
+                    let message = `✅ Upload Base64 realizado com sucesso!<br>
+                                  ID: ${data.image_id}<br>
+                                  Hash: ${data.file_hash}<br>
+                                  Tamanho: ${formatFileSize(data.file_size)}`;
+                    
+                    if (data.duplicate) {
+                        message += '<br>⚠️ Esta imagem já existia no sistema.';
+                    }
+                    
+                    showResult(message, 'success');
+                    document.getElementById('base64Input').value = '';
+                    document.getElementById('base64Filename').value = '';
+                    listImages();
+                } else {
+                    showResult(`❌ Erro: ${data.error}`, 'error');
+                }
+            })
+            .catch(error => {
+                btn.disabled = false;
+                btn.textContent = '📤 Upload Base64';
+                showResult('❌ Erro de conexão', 'error');
+            });
+        }
+
+        function uploadWithProgress(url, formData, buttonId, buttonText) {
+            const btn = document.getElementById(buttonId);
+            btn.disabled = true;
+            btn.textContent = '⏳ Fazendo Upload...';
+            
+            showProgress(0);
+            
+            const xhr = new XMLHttpRequest();
+            
+            xhr.upload.addEventListener('progress', (e) => {
+                if (e.lengthComputable) {
+                    const percentComplete = (e.loaded / e.total) * 100;
+                    showProgress(percentComplete);
+                }
+            });
+            
+            xhr.onload = function() {
+                hideProgress();
+                btn.disabled = false;
+                btn.textContent = buttonText;
+                
+                if (xhr.status === 200) {
+                    const response = JSON.parse(xhr.responseText);
+                    if (response.success) {
+                        handleUploadSuccess(response);
+                        listImages();
+                    } else {
+                        showResult(`❌ Erro: ${response.error}`, 'error');
+                    }
+                } else if (xhr.status === 401) {
+                    showResult('❌ Erro de autenticação. Faça login novamente.', 'error');
+                    logout();
+                } else {
+                    showResult(`❌ Erro HTTP ${xhr.status}`, 'error');
+                }
+            };
+            
+            xhr.onerror = function() {
+                hideProgress();
+                btn.disabled = false;
+                btn.textContent = buttonText;
+                showResult('❌ Erro de conexão', 'error');
+            };
+            
+            xhr.open('POST', url);
+            xhr.setRequestHeader('Authorization', `Bearer ${authToken}`);
+            xhr.send(formData);
+        }
+
+        function handleUploadSuccess(response) {
+            if (response.results) {
+                // Batch upload response
+                let message = `✅ Upload em lote concluído!<br>
+                              ${response.successful_uploads}/${response.total_files || response.total_images} arquivos processados`;
+                
+                if (response.errors && response.errors.length > 0) {
+                    message += '<br><br>Erros:';
+                    response.errors.forEach(error => {
+                        message += `<br>• ${error}`;
+                    });
+                }
+                
+                showResult(message, response.successful_uploads > 0 ? 'success' : 'error');
+            } else {
+                // Single upload response
+                let message = `✅ Upload realizado com sucesso!<br>
+                              ID: ${response.image_id}<br>
+                              Hash: ${response.file_hash}<br>
+                              Tamanho: ${formatFileSize(response.file_size)}`;
+                
+                if (response.duplicate) {
+                    message += '<br>⚠️ Esta imagem já existia no sistema.';
+                }
+                
+                showResult(message, 'success');
+            }
+            
+            // Reset forms
+            selectedFiles = [];
+            batchFiles = [];
+            document.getElementById('uploadBtn').disabled = true;
+            document.getElementById('batchUploadBtn').disabled = true;
+            document.getElementById('fileInput').value = '';
+            document.getElementById('batchFileInput').value = '';
+            document.getElementById('batchFileList').innerHTML = '';
+        }
+
+        function listImages() {
+            if (!authToken) return;
+
+            fetch(`${API_BASE}/list/?limit=20`, {
+                headers: {
+                    'Authorization': `Bearer ${authToken}`
+                }
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    displayImageList(data.images, data.total_count);
+                } else {
+                    showResult(`❌ Erro ao listar: ${data.error}`, 'error');
+                }
+            })
+            .catch(error => {
+                showResult('❌ Erro de conexão ao listar imagens.', 'error');
+            });
+        }
+
+        function displayImageList(images, totalCount) {
+            const imageList = document.getElementById('imageList');
+            
+            if (images.length === 0) {
+                imageList.innerHTML = '<div class="container"><h3>📋 Nenhuma imagem encontrada</h3></div>';
+                return;
+            }
+
+            let html = `<div class="container"><h3>📋 Lista de Imagens (Total: ${totalCount})</h3>`;
+            
+            images.forEach(img => {
+                html += `
+                    <div class="image-item">
+                        <strong>ID:</strong> ${img.id}<br>
+                        <strong>Nome:</strong> ${img.original_filename}<br>
+                        <strong>Tamanho:</strong> ${formatFileSize(img.file_size)}<br>
+                        <strong>Hash:</strong> ${img.file_hash}<br>
+                        <strong>Upload por:</strong> ${img.uploaded_by || 'Anônimo'}<br>
+                        <strong>Data:</strong> ${new Date(img.uploaded_at).toLocaleString('pt-BR')}
+                    </div>
+                `;
+            });
+            
+            html += '</div>';
+            imageList.innerHTML = html;
+        }
+
+        function showResult(message, type) {
+            const result = document.getElementById('result');
+            result.innerHTML = message;
+            result.className = `result ${type}`;
+            result.style.display = 'block';
+        }
+
+        function showProgress(percent) {
+            const container = document.getElementById('progressContainer');
+            const bar = document.getElementById('progressBar');
+            container.style.display = 'block';
+            bar.style.width = percent + '%';
+        }
+
+        function hideProgress() {
+            document.getElementById('progressContainer').style.display = 'none';
+        }
+
+        function formatFileSize(bytes) {
+            if (bytes === 0) return '0 Bytes';
+            const k = 1024;
+            const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+            const i = Math.floor(Math.log(bytes) / Math.log(k));
+            return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+        }
+    </script>
+</body>
+</html>

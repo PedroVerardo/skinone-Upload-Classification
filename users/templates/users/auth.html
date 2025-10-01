@@ -1,0 +1,348 @@
+<!DOCTYPE html>
+{% load static %}
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>JWT Authentication Test</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            margin-bottom: 20px;
+        }
+        .form-group {
+            margin-bottom: 15px;
+        }
+        label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: bold;
+        }
+        input[type="email"], input[type="password"], input[type="text"] {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            box-sizing: border-box;
+        }
+        .btn {
+            background-color: #007bff;
+            color: white;
+            padding: 10px 20px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            margin: 5px;
+        }
+        .btn:hover {
+            background-color: #0056b3;
+        }
+        .btn:disabled {
+            background-color: #6c757d;
+            cursor: not-allowed;
+        }
+        .result {
+            margin-top: 20px;
+            padding: 15px;
+            border-radius: 5px;
+        }
+        .success {
+            background-color: #d4edda;
+            border: 1px solid #c3e6cb;
+            color: #155724;
+        }
+        .error {
+            background-color: #f8d7da;
+            border: 1px solid #f5c6cb;
+            color: #721c24;
+        }
+        .token-display {
+            background-color: #f8f9fa;
+            border: 1px solid #e9ecef;
+            padding: 10px;
+            border-radius: 5px;
+            font-family: monospace;
+            word-break: break-all;
+            margin: 10px 0;
+        }
+        .section {
+            border-bottom: 1px solid #eee;
+            padding-bottom: 20px;
+            margin-bottom: 20px;
+        }
+        .section:last-child {
+            border-bottom: none;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔐 JWT Authentication Test</h1>
+        
+        <!-- Registration Section -->
+        <div class="section">
+            <h2>👤 User Registration</h2>
+            <div class="form-group">
+                <label for="regEmail">Email:</label>
+                <input type="email" id="regEmail" placeholder="test@example.com">
+            </div>
+            <div class="form-group">
+                <label for="regPassword">Password:</label>
+                <input type="password" id="regPassword" placeholder="Enter password">
+            </div>
+            <div class="form-group">
+                <label for="regFirstName">First Name:</label>
+                <input type="text" id="regFirstName" placeholder="John">
+            </div>
+            <div class="form-group">
+                <label for="regLastName">Last Name:</label>
+                <input type="text" id="regLastName" placeholder="Doe">
+            </div>
+            <button class="btn" onclick="registerUser()">Register</button>
+            <div id="regResult"></div>
+        </div>
+        
+        <!-- Login Section -->
+        <div class="section">
+            <h2>🔑 User Login</h2>
+            <div class="form-group">
+                <label for="loginEmail">Email:</label>
+                <input type="email" id="loginEmail" placeholder="test@example.com">
+            </div>
+            <div class="form-group">
+                <label for="loginPassword">Password:</label>
+                <input type="password" id="loginPassword" placeholder="Enter password">
+            </div>
+            <button class="btn" onclick="loginUser()">Login</button>
+            <div id="loginResult"></div>
+        </div>
+        
+        <!-- Token Verification Section -->
+        <div class="section">
+            <h2>🔍 Token Verification</h2>
+            <div class="form-group">
+                <label for="tokenInput">JWT Token:</label>
+                <input type="text" id="tokenInput" placeholder="Paste JWT token here">
+            </div>
+            <button class="btn" onclick="verifyToken()">Verify Token</button>
+            <button class="btn" onclick="useStoredToken()">Use Stored Token</button>
+            <div id="tokenResult"></div>
+        </div>
+        
+        <!-- Protected Request Section -->
+        <div class="section">
+            <h2>🛡️ Protected Request Test</h2>
+            <p>Test making a request to a protected endpoint with JWT token.</p>
+            <button class="btn" onclick="makeProtectedRequest()">Test Protected Request</button>
+            <div id="protectedResult"></div>
+        </div>
+        
+        <!-- Current Token Display -->
+        <div class="section">
+            <h2>🎫 Current Stored Token</h2>
+            <div id="currentToken">No token stored</div>
+            <button class="btn" onclick="clearToken()">Clear Token</button>
+        </div>
+    </div>
+
+    <script>
+        const API_BASE = '/api/auth';
+        let currentToken = localStorage.getItem('jwt_token');
+
+        // Update token display
+        function updateTokenDisplay() {
+            const tokenDiv = document.getElementById('currentToken');
+            if (currentToken) {
+                tokenDiv.innerHTML = `<div class="token-display">${currentToken}</div>`;
+            } else {
+                tokenDiv.innerHTML = 'No token stored';
+            }
+        }
+
+        function showResult(elementId, message, type) {
+            const element = document.getElementById(elementId);
+            element.innerHTML = message;
+            element.className = `result ${type}`;
+            element.style.display = 'block';
+        }
+
+        function registerUser() {
+            const email = document.getElementById('regEmail').value;
+            const password = document.getElementById('regPassword').value;
+            const firstName = document.getElementById('regFirstName').value;
+            const lastName = document.getElementById('regLastName').value;
+
+            if (!email || !password) {
+                showResult('regResult', 'Email and password are required', 'error');
+                return;
+            }
+
+            const data = {
+                email: email,
+                password: password,
+                first_name: firstName,
+                last_name: lastName
+            };
+
+            fetch(`${API_BASE}/register/`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify(data)
+            })
+            .then(response => response.json())
+            .then(result => {
+                if (result.success) {
+                    currentToken = result.tokens.access_token;
+                    localStorage.setItem('jwt_token', currentToken);
+                    updateTokenDisplay();
+                    
+                    showResult('regResult', `✅ Registration successful!<br>
+                        User ID: ${result.user.id}<br>
+                        Email: ${result.user.email}<br>
+                        Token saved to localStorage`, 'success');
+                } else {
+                    showResult('regResult', `❌ Registration failed: ${result.error}`, 'error');
+                }
+            })
+            .catch(error => {
+                showResult('regResult', `❌ Error: ${error.message}`, 'error');
+            });
+        }
+
+        function loginUser() {
+            const email = document.getElementById('loginEmail').value;
+            const password = document.getElementById('loginPassword').value;
+
+            if (!email || !password) {
+                showResult('loginResult', 'Email and password are required', 'error');
+                return;
+            }
+
+            const data = {
+                email: email,
+                password: password
+            };
+
+            fetch(`${API_BASE}/login/`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify(data)
+            })
+            .then(response => response.json())
+            .then(result => {
+                if (result.success) {
+                    currentToken = result.tokens.access_token;
+                    localStorage.setItem('jwt_token', currentToken);
+                    updateTokenDisplay();
+                    
+                    showResult('loginResult', `✅ Login successful!<br>
+                        User ID: ${result.user.id}<br>
+                        Email: ${result.user.email}<br>
+                        Last Login: ${new Date(result.user.last_login).toLocaleString()}<br>
+                        Token saved to localStorage`, 'success');
+                } else {
+                    showResult('loginResult', `❌ Login failed: ${result.error}`, 'error');
+                }
+            })
+            .catch(error => {
+                showResult('loginResult', `❌ Error: ${error.message}`, 'error');
+            });
+        }
+
+        function verifyToken() {
+            const token = document.getElementById('tokenInput').value;
+
+            if (!token) {
+                showResult('tokenResult', 'Token is required', 'error');
+                return;
+            }
+
+            const data = { token: token };
+
+            fetch(`${API_BASE}/verify-token/`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify(data)
+            })
+            .then(response => response.json())
+            .then(result => {
+                if (result.success) {
+                    showResult('tokenResult', `✅ Token is valid!<br>
+                        User ID: ${result.user.id}<br>
+                        Email: ${result.user.email}`, 'success');
+                } else {
+                    showResult('tokenResult', `❌ Token verification failed: ${result.error}`, 'error');
+                }
+            })
+            .catch(error => {
+                showResult('tokenResult', `❌ Error: ${error.message}`, 'error');
+            });
+        }
+
+        function useStoredToken() {
+            if (currentToken) {
+                document.getElementById('tokenInput').value = currentToken;
+                verifyToken();
+            } else {
+                showResult('tokenResult', 'No token stored. Please login first.', 'error');
+            }
+        }
+
+        function makeProtectedRequest() {
+            if (!currentToken) {
+                showResult('protectedResult', 'No token available. Please login first.', 'error');
+                return;
+            }
+
+            fetch('/api/images/list/', {
+                method: 'GET',
+                headers: {
+                    'Authorization': `Bearer ${currentToken}`,
+                    'Content-Type': 'application/json',
+                }
+            })
+            .then(response => response.json())
+            .then(result => {
+                if (result.success) {
+                    showResult('protectedResult', `✅ Protected request successful!<br>
+                        Found ${result.images.length} images<br>
+                        Total count: ${result.total_count}`, 'success');
+                } else {
+                    showResult('protectedResult', `❌ Protected request failed: ${result.error}`, 'error');
+                }
+            })
+            .catch(error => {
+                showResult('protectedResult', `❌ Error: ${error.message}`, 'error');
+            });
+        }
+
+        function clearToken() {
+            currentToken = null;
+            localStorage.removeItem('jwt_token');
+            updateTokenDisplay();
+            document.getElementById('tokenInput').value = '';
+        }
+
+        // Initialize page
+        window.onload = function() {
+            updateTokenDisplay();
+        };
+    </script>
+</body>
+</html>

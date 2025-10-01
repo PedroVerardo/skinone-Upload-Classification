@@ -91,10 +91,8 @@ class UserModelTest(TestCase):
 
 
 class EmailValidationTest(TestCase):
-    """Test cases for email validation in views"""
     
     def setUp(self):
-        """Set up test client and user data"""
         from django.test import Client
         self.client = Client()
         self.valid_user = User.objects.create_user(
@@ -150,7 +148,6 @@ class EmailValidationTest(TestCase):
         """Test email validation in the login API endpoint"""
         import json
         
-        # Test with invalid email format
         response = self.client.post(
             '/users/verify-email-password/',
             data=json.dumps({

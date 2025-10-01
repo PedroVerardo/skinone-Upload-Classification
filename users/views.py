@@ -1,4 +1,5 @@
 from django.http import JsonResponse
+from django.shortcuts import render
 from django.contrib.auth import authenticate
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_http_methods
@@ -7,6 +8,10 @@ from django.core.validators import validate_email
 from django.core.exceptions import ValidationError
 from google.oauth2 import id_token
 from google.auth.transport import requests
+from django.conf import settings
+from django.utils import timezone
+from datetime import datetime, timedelta
+import jwt
 import json
 import logging
 import re
@@ -22,74 +27,55 @@ from .models import User
 logger = logging.getLogger(__name__)
 
 def validate_email_format(email):
-    """
-    Validate email format using multiple validation methods
-    Returns tuple: (is_valid, error_message)
-    """
     if not email:
         return False, "Email is required"
     
     if not isinstance(email, str):
         return False, "Email must be a string"
     
-    # First, normalize the email (strip whitespace and lowercase)
     email = email.strip().lower()
-    
-    # Basic format validation using Django's validator
+
     try:
         validate_email(email)
     except ValidationError:
         return False, "Invalid email format"
     
-    # Use advanced email validation if available
     if EMAIL_VALIDATOR_AVAILABLE:
         try:
-            # This will check DNS records and other advanced validations
             validated_email = validate_email_advanced(
                 email,
-                check_deliverability=False  # Set to True for DNS checking
+                check_deliverability=False
             )
             email = validated_email.email
         except EmailNotValidError as e:
             return False, f"Invalid email: {str(e)}"
     
-    # Additional custom validation
-    # Email is already normalized above
-    
-    # Check for common email format issues
-    if len(email) < 5:  # Minimum realistic email length (a@b.c)
+    if len(email) < 5:
         return False, "Email too short"
     
-    if len(email) > 254:  # RFC 5321 limit
+    if len(email) > 254:
         return False, "Email too long"
-    
-    # Check for multiple @ symbols
+
     if email.count('@') != 1:
         return False, "Email must contain exactly one @ symbol"
     
     local_part, domain = email.split('@')
-    
-    # Validate local part (before @)
+
     if len(local_part) < 1 or len(local_part) > 64:
         return False, "Invalid email local part length"
-    
-    # Validate domain part
+
     if len(domain) < 1 or len(domain) > 253:
         return False, "Invalid email domain length"
-    
-    # Check for valid domain format (at least one dot)
+
     if '.' not in domain:
         return False, "Domain must contain at least one dot"
     
-    # Check for consecutive dots
     if '..' in email:
         return False, "Email cannot contain consecutive dots"
     
-    # Check if starts or ends with dot
     if email.startswith('.') or email.endswith('.'):
         return False, "Email cannot start or end with a dot"
     
-    # Additional regex validation for stricter checking
     email_pattern = re.compile(
         r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
     )
@@ -109,15 +95,72 @@ def validate_password_strength(password):
     if len(password) > 128:
         return False, "Password too long (max 128 characters)"
     
-    # Check for at least one digit
     if not re.search(r'\d', password):
         return False, "Password must contain at least one digit"
     
-    # Check for at least one letter
+
     if not re.search(r'[a-zA-Z]', password):
         return False, "Password must contain at least one letter"
     
     return True, "Valid password strength"
+
+def generate_jwt_tokens(user):
+    """
+    Generate access and refresh JWT tokens for a user
+    """
+    import time
+    current_time = int(time.time())
+    
+    # Token payload
+    payload = {
+        'user_id': user.id,
+        'email': user.email,
+        'exp': current_time + (24 * 60 * 60),  # Token expires in 24 hours
+        'iat': current_time,  # Issued at
+        'type': 'access'
+    }
+    
+    # Refresh token payload (longer expiration)
+    refresh_payload = {
+        'user_id': user.id,
+        'exp': current_time + (7 * 24 * 60 * 60),  # Refresh token expires in 7 days
+        'iat': current_time,
+        'type': 'refresh'
+    }
+    
+    # Get secret key from settings (you should set this in your settings.py)
+    secret_key = getattr(settings, 'JWT_SECRET_KEY', settings.SECRET_KEY)
+    
+    # Generate tokens
+    access_token = jwt.encode(payload, secret_key, algorithm='HS256')
+    refresh_token = jwt.encode(refresh_payload, secret_key, algorithm='HS256')
+    
+    return access_token, refresh_token
+
+def verify_jwt_token(token):
+    """
+    Verify and decode a JWT token
+    Returns user_id if valid, None if invalid
+    """
+    try:
+        secret_key = getattr(settings, 'JWT_SECRET_KEY', settings.SECRET_KEY)
+        payload = jwt.decode(token, secret_key, algorithms=['HS256'])
+        
+        # Check if token is expired (JWT library handles this automatically, but we can double check)
+        import time
+        exp_timestamp = payload.get('exp')
+        if exp_timestamp and exp_timestamp < time.time():
+            return None, "Token expired"
+        
+        return payload.get('user_id'), None
+        
+    except jwt.ExpiredSignatureError:
+        return None, "Token expired"
+    except jwt.InvalidTokenError:
+        return None, "Invalid token"
+    except Exception as e:
+        logger.error(f"JWT verification error: {str(e)}")
+        return None, "Token verification failed"
 
 @csrf_exempt
 @require_http_methods(["POST"])
@@ -168,7 +211,7 @@ def verify_email_password(request):
             'error': 'Internal server error'
         }, status=500)
 
-@csrf_exempt
+
 @require_http_methods(["GET"])
 def get_all_users(request):
     try:
@@ -184,3 +227,236 @@ def get_all_users(request):
             'success': False,
             'error': 'Internal server error'
         }, status=500)
+
+@csrf_exempt
+@require_http_methods(["POST"])
+def register_user(request):
+    """
+    Register a new user
+    Expected JSON: {"email": "user@example.com", "password": "password123"}
+    """
+    try:
+        data = json.loads(request.body)
+        email = data.get('email', '').strip().lower()
+        password = data.get('password', '')
+        first_name = data.get('first_name', '').strip()
+        last_name = data.get('last_name', '').strip()
+        
+        # Validate required fields
+        if not email or not password:
+            return JsonResponse({
+                'success': False,
+                'error': 'Email and password are required'
+            }, status=400)
+        
+        # Validate email format
+        email_valid, email_error = validate_email_format(email)
+        if not email_valid:
+            return JsonResponse({
+                'success': False,
+                'error': f'Invalid email: {email_error}'
+            }, status=400)
+        
+        # Validate password strength
+        password_valid, password_error = validate_password_strength(password)
+        if not password_valid:
+            return JsonResponse({
+                'success': False,
+                'error': f'Invalid password: {password_error}'
+            }, status=400)
+        
+        # Check if user already exists
+        if User.objects.filter(email=email).exists():
+            return JsonResponse({
+                'success': False,
+                'error': 'User with this email already exists'
+            }, status=400)
+        
+        # Create new user
+        user = User.objects.create_user(
+            email=email,
+            password=password,
+            first_name=first_name,
+            last_name=last_name
+        )
+        
+        # Generate JWT tokens
+        access_token, refresh_token = generate_jwt_tokens(user)
+        
+        logger.info(f"New user registered: {email}")
+        
+        return JsonResponse({
+            'success': True,
+            'message': 'User registered successfully',
+            'user': {
+                'id': user.id,
+                'email': user.email,
+                'first_name': user.first_name,
+                'last_name': user.last_name,
+                'date_joined': user.date_joined.isoformat()
+            },
+            'tokens': {
+                'access_token': access_token,
+                'refresh_token': refresh_token
+            }
+        })
+        
+    except json.JSONDecodeError:
+        return JsonResponse({
+            'success': False,
+            'error': 'Invalid JSON data'
+        }, status=400)
+    except Exception as e:
+        logger.error(f"Unexpected error in user registration: {e}")
+        return JsonResponse({
+            'success': False,
+            'error': 'Internal server error'
+        }, status=500)
+
+@csrf_exempt
+@require_http_methods(["POST"])
+def login_user(request):
+    """
+    Login user and return JWT tokens
+    Expected JSON: {"email": "user@example.com", "password": "password123"}
+    """
+    try:
+        data = json.loads(request.body)
+        email = data.get('email', '').strip().lower()
+        password = data.get('password', '')
+        
+        if not email or not password:
+            return JsonResponse({
+                'success': False,
+                'error': 'Email and password are required'
+            }, status=400)
+        
+        # Validate email format
+        email_valid, email_error = validate_email_format(email)
+        if not email_valid:
+            return JsonResponse({
+                'success': False,
+                'error': f'Invalid email: {email_error}'
+            }, status=400)
+        
+        # Check if user exists
+        try:
+            user = User.objects.get(email=email)
+        except User.DoesNotExist:
+            return JsonResponse({
+                'success': False,
+                'error': 'Invalid email or password'
+            }, status=401)
+        
+        # Check if user is active
+        if not user.is_active:
+            return JsonResponse({
+                'success': False,
+                'error': 'User account is disabled'
+            }, status=401)
+        
+        # Verify password
+        if not user.check_password(password):
+            return JsonResponse({
+                'success': False,
+                'error': 'Invalid email or password'
+            }, status=401)
+        
+        # Generate JWT tokens
+        access_token, refresh_token = generate_jwt_tokens(user)
+        
+        # Update last login
+        user.last_login = timezone.now()
+        user.save(update_fields=['last_login'])
+        
+        logger.info(f"User logged in: {email}")
+        
+        return JsonResponse({
+            'success': True,
+            'message': 'Login successful',
+            'user': {
+                'id': user.id,
+                'email': user.email,
+                'first_name': user.first_name,
+                'last_name': user.last_name,
+                'last_login': user.last_login.isoformat()
+            },
+            'tokens': {
+                'access_token': access_token,
+                'refresh_token': refresh_token
+            }
+        })
+        
+    except json.JSONDecodeError:
+        return JsonResponse({
+            'success': False,
+            'error': 'Invalid JSON data'
+        }, status=400)
+    except Exception as e:
+        logger.error(f"Unexpected error in user login: {e}")
+        return JsonResponse({
+            'success': False,
+            'error': 'Internal server error'
+        }, status=500)
+
+@csrf_exempt
+@require_http_methods(["POST"])
+def verify_token(request):
+    """
+    Verify if a JWT token is valid
+    Expected JSON: {"token": "jwt_token_here"}
+    """
+    try:
+        data = json.loads(request.body)
+        token = data.get('token', '')
+        
+        if not token:
+            return JsonResponse({
+                'success': False,
+                'error': 'Token is required'
+            }, status=400)
+        
+        # Verify token
+        user_id, error = verify_jwt_token(token)
+        
+        if error:
+            return JsonResponse({
+                'success': False,
+                'error': error
+            }, status=401)
+        
+        # Get user info
+        try:
+            user = User.objects.get(id=user_id)
+            return JsonResponse({
+                'success': True,
+                'message': 'Token is valid',
+                'user': {
+                    'id': user.id,
+                    'email': user.email,
+                    'first_name': user.first_name,
+                    'last_name': user.last_name
+                }
+            })
+        except User.DoesNotExist:
+            return JsonResponse({
+                'success': False,
+                'error': 'User not found'
+            }, status=401)
+        
+    except json.JSONDecodeError:
+        return JsonResponse({
+            'success': False,
+            'error': 'Invalid JSON data'
+        }, status=400)
+    except Exception as e:
+        logger.error(f"Unexpected error in token verification: {e}")
+        return JsonResponse({
+            'success': False,
+            'error': 'Internal server error'
+        }, status=500)
+
+@require_http_methods(["GET"])
+def auth_page(request):
+    """Render the JWT authentication test page"""
+    return render(request, 'users/auth.html')
