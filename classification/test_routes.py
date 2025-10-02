@@ -28,8 +28,6 @@ class ClassificationRoutesTestCase(TestCase):
             password='testpass123',
             name='Classification Test User',
             coren='123456',
-            specialty='Dermatologia',
-            institution='Test Hospital'
         )
         
         # Get authentication token

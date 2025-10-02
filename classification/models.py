@@ -5,7 +5,6 @@ from images.models import Image
 class Classification(models.Model):
     """Model to store classification results for images"""
     
-    # Enum choices for classification (matching API specification)
     CLASSIFICATION_CHOICES = [
         ('stage1', 'Estágio 1'),
         ('stage2', 'Estágio 2'), 
@@ -15,7 +14,6 @@ class Classification(models.Model):
         ('dtpi', 'DTPI'),
     ]
     
-    # Foreign key relationships
     user = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=models.CASCADE,
@@ -27,22 +25,17 @@ class Classification(models.Model):
         related_name='classifications'
     )
     
-    # Classification field with enum choices
     stage = models.CharField(
         max_length=20,
         choices=CLASSIFICATION_CHOICES,
-        default='nao_classificavel',  # Default value for migration
-        help_text="Classification stage for the image"
+        default='not_classifiable',
     )
     
-    # Observations field (renamed from comment to match API spec)
     observations = models.TextField(
         blank=True,
         null=True,
-        help_text="Additional observations about the classification"
     )
     
-    # Timestamps
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
     

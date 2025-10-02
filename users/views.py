@@ -396,8 +396,7 @@ def verify_token(request):
         
         if not token:
             return JsonResponse({
-                'success': False,
-                'error': 'Token is required'
+                'message': 'Token is required'
             }, status=400)
         
         # Verify token
@@ -405,15 +404,13 @@ def verify_token(request):
         
         if error:
             return JsonResponse({
-                'success': False,
-                'error': error
+                'message': error
             }, status=401)
         
         # Get user info
         try:
             user = User.objects.get(id=user_id)
             return JsonResponse({
-                'success': True,
                 'message': 'Token is valid',
                 'user': {
                     'id': user.id,
@@ -421,23 +418,20 @@ def verify_token(request):
                     'first_name': user.first_name,
                     'last_name': user.last_name
                 }
-            })
+            }, status=200)
         except User.DoesNotExist:
             return JsonResponse({
-                'success': False,
-                'error': 'User not found'
+                'message': 'User not found'
             }, status=401)
         
     except json.JSONDecodeError:
         return JsonResponse({
-            'success': False,
-            'error': 'Invalid JSON data'
+            'message': 'Invalid JSON data'
         }, status=400)
     except Exception as e:
         logger.error(f"Unexpected error in token verification: {e}")
         return JsonResponse({
-            'success': False,
-            'error': 'Internal server error'
+            'message': 'Internal server error'
         }, status=500)
 
 @require_http_methods(["GET"])
