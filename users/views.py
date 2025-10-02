@@ -1,7 +1,7 @@
 from django.http import JsonResponse
 from django.shortcuts import render
 from django.contrib.auth import authenticate
-from django.views.decorators.csrf import csrf_exempt
+from django.views.decorators.csrf import csrf_exempt, ensure_csrf_cookie
 from django.views.decorators.http import require_http_methods
 from rest_framework.decorators import api_view, authentication_classes, permission_classes
 from rest_framework.permissions import AllowAny
@@ -522,3 +522,35 @@ def verify_token(request):
 def auth_page(request):
     """Render the JWT authentication test page"""
     return render(request, 'users/auth.html')
+
+
+@ensure_csrf_cookie
+def csrf_token(request):
+    """Return CSRF token and set csrftoken cookie for the client."""
+    from django.middleware.csrf import get_token
+    token = get_token(request)
+    return JsonResponse({'csrfToken': token})
+
+
+@api_view(["GET"])
+def me(request):
+    user = getattr(request, 'user', None)
+    if not user or not getattr(user, 'is_authenticated', False):
+        # Try JWT header
+        auth_header = request.META.get('HTTP_AUTHORIZATION', '')
+        if auth_header.startswith('Bearer '):
+            token = auth_header.split(' ')[1]
+            user_id, error = verify_jwt_token(token)
+            if not error:
+                try:
+                    user = User.objects.get(id=user_id)
+                except User.DoesNotExist:
+                    user = None
+    if not user:
+        return JsonResponse({'detail': 'Authentication credentials were not provided.'}, status=401)
+    return JsonResponse({
+        'id': user.id,
+        'name': getattr(user, 'name', ''),
+        'email': user.email,
+        'is_staff': user.is_staff,
+    })

@@ -109,6 +109,11 @@ CORS_ALLOWED_ORIGINS = [
     'https://<prod-domain>',
 ]
 
+# Allow all origins (any IP / domain)
+CORS_ALLOW_ALL_ORIGINS = True
+# Backward compatibility for older django-cors-headers versions
+CORS_ORIGIN_ALLOW_ALL = True
+
 # Restrict allowed CORS methods
 CORS_ALLOW_METHODS = [
     'GET',
@@ -122,16 +127,24 @@ CORS_ALLOW_METHODS = [
 CORS_ALLOW_HEADERS = [
     'authorization',
     'content-type',
+    'x-csrftoken',
+    'x-requested-with',
+    'accept',
+    'origin',
 ]
 
 # Allow cross-site requests from trusted frontends (for CSRF origin check)
 CSRF_TRUSTED_ORIGINS = [
-    'http://localhost:8080',
-    'http://127.0.0.1:8080',
-    'http://localhost',
-    'http://127.0.0.1',
-    'https://<prod-domain>',
+    'http://*',
+    'https://*',
 ]
+
+# Allow cross-site cookies for CSRF if needed (adjust in prod)
+CSRF_COOKIE_SAMESITE = 'None'
+CSRF_COOKIE_SECURE = False
+
+# Allow credentials if frontend uses cookies
+CORS_ALLOW_CREDENTIALS = True
 
 # Allow CORS for Swagger UI served locally (optional)
 # You can remove or extend as needed

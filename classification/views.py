@@ -2,6 +2,7 @@ import json
 import logging
 from functools import wraps
 from django.shortcuts import render
+from django.conf import settings
 from django.http import JsonResponse
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_http_methods
@@ -12,6 +13,7 @@ from .models import Classification
 from images.models import Image
 from rest_framework import serializers
 from drf_spectacular.utils import extend_schema, OpenApiResponse
+from django.db.models import Count, OuterRef, Subquery, IntegerField
 
 logger = logging.getLogger(__name__)
 User = get_user_model()
@@ -420,5 +422,54 @@ def get_classification_choices(request):
             for choice in Classification.CLASSIFICATION_CHOICES
         ]
     })
+
+
+@require_http_methods(["GET"])
+@jwt_required
+def get_classification_images(request):
+    """
+    GET /clssification_images/?id=<id>
+    Auth required
+    Returns up to 30 images not yet classified by the given user id.
+    Ordered from images with least total classifications to most.
+    Response: 200 OK, [ { id, url } ]
+    """
+    try:
+        # Prefer user id from header (e.g., `id`), fallback to query param
+        user_id = request.headers.get('id') or request.GET.get('id')
+        if not user_id:
+            return JsonResponse({'message': 'id is required'}, status=400)
+
+        # Subquery: total number of classifications for each image (by anyone)
+        total_classifications_subq = Classification.objects.filter(
+            image=OuterRef('pk')
+        ).values('image').annotate(total=Count('id')).values('total')
+
+        # Images already classified by this user
+        classified_by_user = Classification.objects.filter(user_id=user_id).values('image_id')
+
+        # Base queryset: images not classified by this user
+        qs = (
+            Image.objects.exclude(id__in=classified_by_user)
+            .annotate(total_classifications=Subquery(total_classifications_subq, output_field=IntegerField()))
+            .order_by('total_classifications', 'uploaded_at')
+        )
+
+        # Limit to 30 images
+        images = list(qs[:30])
+
+        data = [
+            {
+                'id': img.id,
+                'url': f"{settings.MEDIA_URL}{img.file_path}" if img.file_path else None,
+            }
+            for img in images
+        ]
+
+        return JsonResponse(data, safe=False, status=200)
+
+    except Exception as e:
+        logger.error(f"Error fetching classification images: {str(e)}")
+        return JsonResponse({'message': 'Internal server error'}, status=500)
 
 # Create your views here.

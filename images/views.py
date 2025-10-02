@@ -6,7 +6,8 @@ from django.shortcuts import render
 from django.http import JsonResponse
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_http_methods
-from rest_framework.decorators import api_view
+from rest_framework.decorators import api_view, parser_classes
+from rest_framework.parsers import MultiPartParser, FormParser
 from django.conf import settings
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth import get_user_model
@@ -1034,14 +1035,17 @@ def list_images(request):
             'message': 'Internal server error'
         }, status=500)
 
+@csrf_exempt
 @extend_schema(
     tags=["Images"],
     summary="Upload images (batch)",
-    request=UploadBatchRequestSerializer,
+    request={
+        'multipart/form-data': UploadBatchRequestSerializer,
+    },
     responses={201: UploadBatchResponseSerializer, 400: OpenApiResponse(description='Bad request'), 500: OpenApiResponse(description='Internal server error')},
 )
 @api_view(["POST"])
-@csrf_exempt
+@parser_classes([MultiPartParser, FormParser])
 @jwt_required
 def upload_batch_images(request):
     """
@@ -1116,6 +1120,7 @@ def upload_batch_images(request):
         logger.info(f"Batch upload completed: {len(uploaded)} files processed by {request.user.name}")
         
         return JsonResponse({
+            'success': True,
             'upload_batch_id': upload_batch_id,
             'uploaded': uploaded
         }, status=201)
@@ -1126,14 +1131,17 @@ def upload_batch_images(request):
             'message': 'Internal server error'
         }, status=500)
 
+@csrf_exempt
 @extend_schema(
     tags=["Images"],
     summary="Upload single image",
-    request=UploadSingleRequestSerializer,
+    request={
+        'multipart/form-data': UploadSingleRequestSerializer,
+    },
     responses={201: UploadSingleResponseSerializer, 400: OpenApiResponse(description='Bad request'), 500: OpenApiResponse(description='Internal server error')},
 )
 @api_view(["POST"])
-@csrf_exempt
+@parser_classes([MultiPartParser, FormParser])
 @jwt_required
 def upload_single_image(request):
     """
@@ -1196,6 +1204,7 @@ def upload_single_image(request):
         logger.info(f"Single image uploaded: {image.id} - {uploaded_file.name} by {request.user.name}")
         
         return JsonResponse({
+            'success': True,
             'image': {
                 'id': image.id,
                 'url': f"{settings.MEDIA_URL}{image.file_path}"
@@ -1208,15 +1217,17 @@ def upload_single_image(request):
             'message': 'Internal server error'
         }, status=500)
 
+@csrf_exempt
 @extend_schema(
     tags=["Images"],
     summary="Upload images with stage",
-    request=UploadBatchRequestSerializer,
+    request={
+        'multipart/form-data': UploadBatchRequestSerializer,
+    },
     responses={201: UploadBatchResponseSerializer, 400: OpenApiResponse(description='Bad request'), 500: OpenApiResponse(description='Internal server error')},
 )
 @api_view(["POST"])
-@csrf_exempt
-@jwt_required
+@parser_classes([MultiPartParser, FormParser])
 def upload_with_stage(request):
     """
     POST /images/upload/with-stage/?stage=<estagio>
@@ -1323,6 +1334,7 @@ def upload_with_stage(request):
         logger.info(f"Upload with stage completed: {len(uploaded)} files, {len(classified)} classified as {stage} by {request.user.name}")
         
         return JsonResponse({
+            'success': True,
             'upload_batch_id': upload_batch_id,
             'uploaded': uploaded,
             'stage': stage,
