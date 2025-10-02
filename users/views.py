@@ -233,78 +233,78 @@ def get_all_users(request):
 def register_user(request):
     """
     Register a new user
-    Expected JSON: {"email": "user@example.com", "password": "password123"}
+    Expected JSON: { name, email, password, coren, specialty, institution }
+    Response: 201 Created, { id, name, email }
     """
     try:
         data = json.loads(request.body)
+        name = data.get('name', '').strip()
         email = data.get('email', '').strip().lower()
         password = data.get('password', '')
-        first_name = data.get('first_name', '').strip()
-        last_name = data.get('last_name', '').strip()
+        coren = data.get('coren', '').strip()
         
         # Validate required fields
-        if not email or not password:
+        if not name or not email or not password:
+            errors = {}
+            if not name:
+                errors['name'] = ['Name is required']
+            if not email:
+                errors['email'] = ['Email is required']
+            if not password:
+                errors['password'] = ['Password is required']
+            
             return JsonResponse({
-                'success': False,
-                'error': 'Email and password are required'
+                'message': 'Validation failed',
+                'errors': errors
             }, status=400)
-        
         # Validate email format
         email_valid, email_error = validate_email_format(email)
         if not email_valid:
             return JsonResponse({
-                'success': False,
-                'error': f'Invalid email: {email_error}'
+                'message': 'Validation failed',
+                'errors': {
+                    'email': [email_error]
+                }
             }, status=400)
         
         # Validate password strength
         password_valid, password_error = validate_password_strength(password)
         if not password_valid:
             return JsonResponse({
-                'success': False,
-                'error': f'Invalid password: {password_error}'
+                'message': 'Validation failed',
+                'errors': {
+                    'password': [password_error]
+                }
             }, status=400)
         
         # Check if user already exists
         if User.objects.filter(email=email).exists():
             return JsonResponse({
-                'success': False,
-                'error': 'User with this email already exists'
+                'message': 'Validation failed',
+                'errors': {
+                    'email': ['User with this email already exists']
+                }
             }, status=400)
         
         # Create new user
         user = User.objects.create_user(
             email=email,
             password=password,
-            first_name=first_name,
-            last_name=last_name
+            name=name,
+            coren=coren if coren else None,
         )
         
-        # Generate JWT tokens
-        access_token, refresh_token = generate_jwt_tokens(user)
-        
-        logger.info(f"New user registered: {email}")
+        logger.info(f"New user registered: {name} ({email})")
         
         return JsonResponse({
-            'success': True,
-            'message': 'User registered successfully',
-            'user': {
-                'id': user.id,
-                'email': user.email,
-                'first_name': user.first_name,
-                'last_name': user.last_name,
-                'date_joined': user.date_joined.isoformat()
-            },
-            'tokens': {
-                'access_token': access_token,
-                'refresh_token': refresh_token
-            }
-        })
+            'id': user.id,
+            'name': user.name,
+            'email': user.email
+        }, status=201)
         
     except json.JSONDecodeError:
         return JsonResponse({
-            'success': False,
-            'error': 'Invalid JSON data'
+            'message': 'Invalid JSON data'
         }, status=400)
     except Exception as e:
         logger.error(f"Unexpected error in user registration: {e}")
@@ -317,8 +317,9 @@ def register_user(request):
 @require_http_methods(["POST"])
 def login_user(request):
     """
-    Login user and return JWT tokens
-    Expected JSON: {"email": "user@example.com", "password": "password123"}
+    Login user and return JWT token
+    Expected JSON: { email, password }
+    Response: 200 OK, { token, user: { id, name, email } }
     """
     try:
         data = json.loads(request.body)
@@ -327,76 +328,59 @@ def login_user(request):
         
         if not email or not password:
             return JsonResponse({
-                'success': False,
-                'error': 'Email and password are required'
+                'message': 'Validation failed',
+                'errors': {
+                    'email': ['Email is required'] if not email else [],
+                    'password': ['Password is required'] if not password else []
+                }
             }, status=400)
         
-        # Validate email format
-        email_valid, email_error = validate_email_format(email)
-        if not email_valid:
-            return JsonResponse({
-                'success': False,
-                'error': f'Invalid email: {email_error}'
-            }, status=400)
-        
-        # Check if user exists
+        # Check if user exists and verify password
         try:
             user = User.objects.get(email=email)
         except User.DoesNotExist:
             return JsonResponse({
-                'success': False,
-                'error': 'Invalid email or password'
+                'message': 'Invalid credentials'
             }, status=401)
         
         # Check if user is active
         if not user.is_active:
             return JsonResponse({
-                'success': False,
-                'error': 'User account is disabled'
+                'message': 'User account is disabled'
             }, status=401)
         
         # Verify password
         if not user.check_password(password):
             return JsonResponse({
-                'success': False,
-                'error': 'Invalid email or password'
+                'message': 'Invalid credentials'
             }, status=401)
         
-        # Generate JWT tokens
-        access_token, refresh_token = generate_jwt_tokens(user)
+        # Generate JWT token (only access token as per spec)
+        access_token, _ = generate_jwt_tokens(user)
         
         # Update last login
         user.last_login = timezone.now()
         user.save(update_fields=['last_login'])
         
-        logger.info(f"User logged in: {email}")
+        logger.info(f"User logged in: {user.name} ({email})")
         
         return JsonResponse({
-            'success': True,
-            'message': 'Login successful',
+            'token': access_token,
             'user': {
                 'id': user.id,
-                'email': user.email,
-                'first_name': user.first_name,
-                'last_name': user.last_name,
-                'last_login': user.last_login.isoformat()
-            },
-            'tokens': {
-                'access_token': access_token,
-                'refresh_token': refresh_token
+                'name': user.name,
+                'email': user.email
             }
-        })
+        }, status=200)
         
     except json.JSONDecodeError:
         return JsonResponse({
-            'success': False,
-            'error': 'Invalid JSON data'
+            'message': 'Invalid JSON data'
         }, status=400)
     except Exception as e:
         logger.error(f"Unexpected error in user login: {e}")
         return JsonResponse({
-            'success': False,
-            'error': 'Internal server error'
+            'message': 'Internal server error'
         }, status=500)
 
 @csrf_exempt

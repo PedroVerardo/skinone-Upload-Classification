@@ -5,15 +5,14 @@ from images.models import Image
 class Classification(models.Model):
     """Model to store classification results for images"""
     
-    # Enum choices for classification
+    # Enum choices for classification (matching API specification)
     CLASSIFICATION_CHOICES = [
-        ('stage1', 'Stage 1'),
-        ('stage2', 'Stage 2'),
-        ('stage3', 'Stage 3'),
-        ('stage4', 'Stage 4'),
-        ('normal', 'Normal'),
-        ('notapplicable', 'Not Applicable'),
-        ('notunderstand', 'Not Understand'),
+        ('stage1', 'Estágio 1'),
+        ('stage2', 'Estágio 2'), 
+        ('stage3', 'Estágio 3'),
+        ('stage4', 'Estágio 4'),
+        ('not_classifiable', 'Not Classifiable'),
+        ('dtpi', 'DTPI'),
     ]
     
     # Foreign key relationships
@@ -29,17 +28,18 @@ class Classification(models.Model):
     )
     
     # Classification field with enum choices
-    classification = models.CharField(
+    stage = models.CharField(
         max_length=20,
         choices=CLASSIFICATION_CHOICES,
-        help_text="Classification result for the image"
+        default='nao_classificavel',  # Default value for migration
+        help_text="Classification stage for the image"
     )
     
-    # Comment field
-    comment = models.TextField(
+    # Observations field (renamed from comment to match API spec)
+    observations = models.TextField(
         blank=True,
         null=True,
-        help_text="Additional comments about the classification"
+        help_text="Additional observations about the classification"
     )
     
     # Timestamps
@@ -52,6 +52,6 @@ class Classification(models.Model):
         # unique_together = ['user', 'image']
     
     def __str__(self):
-        return f"Classification by {self.user.email} for Image {self.image.id}: {self.get_classification_display()}"
+        return f"Classification by {self.user.name} for Image {self.image.id}: {self.get_stage_display()}"
 
 # Create your models here.

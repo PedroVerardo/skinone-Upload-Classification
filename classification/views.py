@@ -60,35 +60,41 @@ def jwt_required(f):
     return decorated_function
 
 @csrf_exempt
-@require_http_methods(["POST"])
+@require_http_methods(["POST", "GET"])
 @jwt_required
 def create_classification(request):
     """
-    Create a new classification for an image
-    Expected JSON: {
-        "image_id": 1,
-        "classification": "stage1",
-        "comment": "Optional comment"
-    }
+    POST /classifications/
+    Auth required
+    Request: { image_id: string, stage: "estagio1"|"estagio2"|"estagio3"|"estagio4"|"nao_classificavel"|"dtpi", observations?: string }
+    Response: 201 Created, { id, image_id, stage, created_at }
     """
+    if request.method == 'GET':
+        return list_classifications(request)
+    
     try:
         data = json.loads(request.body)
         image_id = data.get('image_id')
-        classification = data.get('classification')
-        comment = data.get('comment', '')
+        stage = data.get('stage')
+        observations = data.get('observations', '')
         
-        if not image_id or not classification:
+        if not image_id or not stage:
             return JsonResponse({
-                'success': False,
-                'error': 'image_id and classification are required'
+                'message': 'Validation failed',
+                'errors': {
+                    'image_id': ['Image ID is required'] if not image_id else [],
+                    'stage': ['Stage is required'] if not stage else []
+                }
             }, status=400)
         
-        # Validate classification choice
+        # Validate stage choice
         valid_choices = [choice[0] for choice in Classification.CLASSIFICATION_CHOICES]
-        if classification not in valid_choices:
+        if stage not in valid_choices:
             return JsonResponse({
-                'success': False,
-                'error': f'Invalid classification. Valid choices: {valid_choices}'
+                'message': 'Validation failed',
+                'errors': {
+                    'stage': [f'Invalid stage. Valid choices: {valid_choices}']
+                }
             }, status=400)
         
         # Check if image exists
@@ -96,43 +102,67 @@ def create_classification(request):
             image = Image.objects.get(id=image_id)
         except Image.DoesNotExist:
             return JsonResponse({
-                'success': False,
-                'error': 'Image not found'
+                'message': 'Image not found'
             }, status=404)
         
         # Create classification
         classification_obj = Classification.objects.create(
             user=request.user,
             image=image,
-            classification=classification,
-            comment=comment
+            stage=stage,
+            observations=observations
         )
         
-        logger.info(f"Classification created: {classification_obj.id} by {request.user.email}")
+        logger.info(f"Classification created: {classification_obj.id} by {request.user.name}")
         
         return JsonResponse({
-            'success': True,
-            'message': 'Classification created successfully',
-            'classification': {
-                'id': classification_obj.id,
-                'image_id': classification_obj.image.id,
-                'classification': classification_obj.classification,
-                'comment': classification_obj.comment,
-                'created_at': classification_obj.created_at.isoformat(),
-                'user_email': classification_obj.user.email
-            }
-        })
+            'id': classification_obj.id,
+            'image_id': str(classification_obj.image.id),
+            'stage': classification_obj.stage,
+            'created_at': classification_obj.created_at.isoformat()
+        }, status=201)
         
     except json.JSONDecodeError:
         return JsonResponse({
-            'success': False,
-            'error': 'Invalid JSON data'
+            'message': 'Invalid JSON data'
         }, status=400)
     except Exception as e:
         logger.error(f"Error creating classification: {str(e)}")
         return JsonResponse({
-            'success': False,
-            'error': 'Internal server error'
+            'message': 'Internal server error'
+        }, status=500)
+
+@require_http_methods(["GET"])
+@jwt_required  
+def list_classifications(request):
+    """
+    GET /classifications/?image_id=<id>
+    Auth required
+    Response: 200 OK, [ { id, image_id, stage, created_at } ]
+    """
+    try:
+        classifications = Classification.objects.all().order_by('-created_at')
+        
+        # Filter by image_id if provided
+        image_id = request.GET.get('image_id')
+        if image_id:
+            classifications = classifications.filter(image_id=image_id)
+        
+        classifications_data = []
+        for classification in classifications:
+            classifications_data.append({
+                'id': classification.id,
+                'image_id': str(classification.image.id),
+                'stage': classification.stage,
+                'created_at': classification.created_at.isoformat()
+            })
+        
+        return JsonResponse(classifications_data, safe=False, status=200)
+        
+    except Exception as e:
+        logger.error(f"Error listing classifications: {str(e)}")
+        return JsonResponse({
+            'message': 'Internal server error'
         }, status=500)
 
 @require_http_methods(["GET"])

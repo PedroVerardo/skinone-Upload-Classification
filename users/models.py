@@ -27,14 +27,15 @@ class CustomUserManager(BaseUserManager):
 # Create your models here.
 class User(AbstractUser):
     email = models.EmailField(unique=True)
-    sigla_estado = models.CharField(max_length=2, blank=True, null=True)
-    corem_number = models.CharField(max_length=20, blank=True, null=True)
+    name = models.CharField(max_length=255, blank=True, null=True, default='Not informed')
+    coren = models.CharField(max_length=20, blank=True, null=True)
     username = None
+    
     USERNAME_FIELD = 'email'
-    REQUIRED_FIELDS = []
+    REQUIRED_FIELDS = ['name']
     
     objects = CustomUserManager()
 
     def __str__(self):
-        return self.email
+        return f"{self.name} ({self.email})"
 

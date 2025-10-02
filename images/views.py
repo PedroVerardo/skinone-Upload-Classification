@@ -974,4 +974,317 @@ def _handle_json_upload_with_classification(request):
         'errors': errors
     })
 
+# New views matching API specification exactly
+
+@require_http_methods(["GET"])
+@jwt_required
+def list_images(request):
+    """
+    GET /images/
+    Auth required
+    Response: 200 OK, [ { id, url } ]
+    """
+    try:
+        images = Image.objects.all().order_by('-uploaded_at')
+        
+        images_data = []
+        for image in images:
+            # Generate URL based on MEDIA_URL and file_path
+            url = f"{settings.MEDIA_URL}{image.file_path}" if image.file_path else None
+            images_data.append({
+                'id': image.id,
+                'url': url
+            })
+        
+        return JsonResponse(images_data, safe=False, status=200)
+        
+    except Exception as e:
+        logger.error(f"Error listing images: {str(e)}")
+        return JsonResponse({
+            'message': 'Internal server error'
+        }, status=500)
+
+@csrf_exempt
+@require_http_methods(["POST"])
+@jwt_required
+def upload_batch_images(request):
+    """
+    POST /images/upload/
+    Auth required
+    Multipart form
+    Field: images (repeatable) -> multiple files allowed
+    Response: 201 Created, { upload_batch_id, uploaded }
+    """
+    try:
+        import uuid
+        
+        # Get all image files
+        uploaded_files = request.FILES.getlist('images')
+        
+        if not uploaded_files:
+            return JsonResponse({
+                'message': 'No image files provided'
+            }, status=400)
+        
+        upload_batch_id = str(uuid.uuid4())
+        uploaded = []
+        allowed_extensions = ['.jpg', '.jpeg', '.png', '.gif', '.bmp', '.webp']
+        max_size = 10 * 1024 * 1024
+        
+        for uploaded_file in uploaded_files:
+            try:
+                # Validate file type
+                file_extension = os.path.splitext(uploaded_file.name)[1].lower()
+                if file_extension not in allowed_extensions:
+                    continue
+                
+                # Validate file size
+                if uploaded_file.size > max_size:
+                    continue
+                
+                # Calculate file hash
+                file_hash = calculate_file_hash(uploaded_file)
+                
+                # Check if image already exists (skip if exists)
+                existing_image = Image.objects.filter(file_hash=file_hash).first()
+                if existing_image:
+                    uploaded.append({
+                        'id': existing_image.id,
+                        'url': f"{settings.MEDIA_URL}{existing_image.file_path}",
+                        'status': 'existing'
+                    })
+                    continue
+                
+                # Save file to disk
+                file_path = save_uploaded_file(uploaded_file, file_hash)
+                
+                # Create database record
+                image = Image.objects.create(
+                    file_path=file_path,
+                    file_hash=file_hash,
+                    original_filename=uploaded_file.name,
+                    file_size=uploaded_file.size,
+                    uploaded_by=request.user
+                )
+                
+                uploaded.append({
+                    'id': image.id,
+                    'url': f"{settings.MEDIA_URL}{image.file_path}",
+                    'status': 'uploaded'
+                })
+                
+            except Exception as e:
+                logger.error(f"Error processing file {uploaded_file.name}: {str(e)}")
+                continue
+        
+        logger.info(f"Batch upload completed: {len(uploaded)} files processed by {request.user.name}")
+        
+        return JsonResponse({
+            'upload_batch_id': upload_batch_id,
+            'uploaded': uploaded
+        }, status=201)
+        
+    except Exception as e:
+        logger.error(f"Error in batch upload: {str(e)}")
+        return JsonResponse({
+            'message': 'Internal server error'
+        }, status=500)
+
+@csrf_exempt
+@require_http_methods(["POST"])
+@jwt_required
+def upload_single_image(request):
+    """
+    POST /images/upload/single/
+    Auth required
+    Multipart form
+    Field: image
+    Response: 201 Created, { image: { id, url } }
+    """
+    try:
+        # Check if image file was provided
+        if 'image' not in request.FILES:
+            return JsonResponse({
+                'message': 'No image file provided'
+            }, status=400)
+        
+        uploaded_file = request.FILES['image']
+        
+        # Validate file type
+        allowed_extensions = ['.jpg', '.jpeg', '.png', '.gif', '.bmp', '.webp']
+        file_extension = os.path.splitext(uploaded_file.name)[1].lower()
+        
+        if file_extension not in allowed_extensions:
+            return JsonResponse({
+                'message': f'File type not allowed. Allowed types: {", ".join(allowed_extensions)}'
+            }, status=400)
+        
+        # Validate file size (max 10MB)
+        max_size = 10 * 1024 * 1024
+        if uploaded_file.size > max_size:
+            return JsonResponse({
+                'message': 'File too large. Maximum size is 10MB'
+            }, status=400)
+        
+        # Calculate file hash
+        file_hash = calculate_file_hash(uploaded_file)
+        
+        # Check if image already exists
+        existing_image = Image.objects.filter(file_hash=file_hash).first()
+        if existing_image:
+            return JsonResponse({
+                'image': {
+                    'id': existing_image.id,
+                    'url': f"{settings.MEDIA_URL}{existing_image.file_path}"
+                }
+            }, status=201)
+        
+        # Save file to disk
+        file_path = save_uploaded_file(uploaded_file, file_hash)
+        
+        # Create database record
+        image = Image.objects.create(
+            file_path=file_path,
+            file_hash=file_hash,
+            original_filename=uploaded_file.name,
+            file_size=uploaded_file.size,
+            uploaded_by=request.user
+        )
+        
+        logger.info(f"Single image uploaded: {image.id} - {uploaded_file.name} by {request.user.name}")
+        
+        return JsonResponse({
+            'image': {
+                'id': image.id,
+                'url': f"{settings.MEDIA_URL}{image.file_path}"
+            }
+        }, status=201)
+        
+    except Exception as e:
+        logger.error(f"Error uploading single image: {str(e)}")
+        return JsonResponse({
+            'message': 'Internal server error'
+        }, status=500)
+
+@csrf_exempt
+@require_http_methods(["POST"])
+@jwt_required
+def upload_with_stage(request):
+    """
+    POST /images/upload/with-stage/?stage=<estagio>
+    Auth required
+    Multipart form
+    Field: images (repeatable)
+    Query param: stage: "estagio1"|"estagio2"|"estagio3"|"estagio4"|"nao_classificavel"|"dtpi"
+    Efeito: cria imagens e já registra classificação para cada uma
+    Response: 201 Created, { upload_batch_id, uploaded, stage, classified }
+    """
+    try:
+        import uuid
+        from classification.models import Classification
+        
+        # Get stage from query parameter
+        stage = request.GET.get('stage')
+        if not stage:
+            return JsonResponse({
+                'message': 'Stage parameter is required'
+            }, status=400)
+        
+        # Validate stage value
+        valid_stages = [choice[0] for choice in Classification.CLASSIFICATION_CHOICES]
+        if stage not in valid_stages:
+            return JsonResponse({
+                'message': f'Invalid stage. Valid options: {valid_stages}'
+            }, status=400)
+        
+        # Get all image files
+        uploaded_files = request.FILES.getlist('images')
+        
+        if not uploaded_files:
+            return JsonResponse({
+                'message': 'No image files provided'
+            }, status=400)
+        
+        upload_batch_id = str(uuid.uuid4())
+        uploaded = []
+        classified = []
+        allowed_extensions = ['.jpg', '.jpeg', '.png', '.gif', '.bmp', '.webp']
+        max_size = 10 * 1024 * 1024
+        
+        for uploaded_file in uploaded_files:
+            try:
+                # Validate file type
+                file_extension = os.path.splitext(uploaded_file.name)[1].lower()
+                if file_extension not in allowed_extensions:
+                    continue
+                
+                # Validate file size
+                if uploaded_file.size > max_size:
+                    continue
+                
+                # Calculate file hash
+                file_hash = calculate_file_hash(uploaded_file)
+                
+                # Check if image already exists
+                existing_image = Image.objects.filter(file_hash=file_hash).first()
+                if existing_image:
+                    image = existing_image
+                    uploaded.append({
+                        'id': image.id,
+                        'url': f"{settings.MEDIA_URL}{image.file_path}",
+                        'status': 'existing'
+                    })
+                else:
+                    # Save new file
+                    file_path = save_uploaded_file(uploaded_file, file_hash)
+                    
+                    # Create database record
+                    image = Image.objects.create(
+                        file_path=file_path,
+                        file_hash=file_hash,
+                        original_filename=uploaded_file.name,
+                        file_size=uploaded_file.size,
+                        uploaded_by=request.user
+                    )
+                    
+                    uploaded.append({
+                        'id': image.id,
+                        'url': f"{settings.MEDIA_URL}{image.file_path}",
+                        'status': 'uploaded'
+                    })
+                
+                # Create classification for the image
+                classification = Classification.objects.create(
+                    user=request.user,
+                    image=image,
+                    stage=stage,
+                    observations=''  # No observations for batch classification
+                )
+                
+                classified.append({
+                    'id': classification.id,
+                    'image_id': image.id,
+                    'stage': stage,
+                    'created_at': classification.created_at.isoformat()
+                })
+                
+            except Exception as e:
+                logger.error(f"Error processing file {uploaded_file.name}: {str(e)}")
+                continue
+        
+        logger.info(f"Upload with stage completed: {len(uploaded)} files, {len(classified)} classified as {stage} by {request.user.name}")
+        
+        return JsonResponse({
+            'upload_batch_id': upload_batch_id,
+            'uploaded': uploaded,
+            'stage': stage,
+            'classified': classified
+        }, status=201)
+        
+    except Exception as e:
+        logger.error(f"Error in upload with stage: {str(e)}")
+        return JsonResponse({
+            'message': 'Internal server error'
+        }, status=500)
+
 # Create your views here.

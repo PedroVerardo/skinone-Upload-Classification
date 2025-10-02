@@ -1,9 +1,3 @@
-# Django API Routes for Skin One Frontend
-
-Base URL: `${VITE_API_BASE_URL}`
-
-All JSON responses should use `application/json`. Use JWT or token-based auth; the frontend sends `Authorization: Bearer <token>` when logged in.
-
 ## Auth
 
 - POST /auth/register/
@@ -14,11 +8,12 @@ All JSON responses should use `application/json`. Use JWT or token-based auth; t
   - Request: { email, password }
   - Response: 200 OK, { token, user: { id, name, email } }
 
+
 ## Images
 
 - GET /images/
   - Auth required
-  - Response: 200 OK, [ { id, url, patient? } ] //Aqui no caso seria path ao invez de url, ou eu deveria enviar todas as imagens?
+  - Response: 200 OK, [ { id, url } ] 
 
 - POST /images/upload/
   - Auth required
@@ -36,7 +31,7 @@ All JSON responses should use `application/json`. Use JWT or token-based auth; t
   - Auth required
   - Multipart form
   - Field: images (repeatable)
-  - Query param: stage: "estagio1"|"estagio2"|"estagio3"|"estagio4"|"nao_classificavel"|"dtpi"
+  - Query param: stage: "stage1"|"stage2"|"stage3"|"stage4"|"not_classifiable"|"dtpi"
   - Efeito: cria imagens e já registra classificação para cada uma
   - Response: 201 Created, { upload_batch_id, uploaded, stage, classified }
 
@@ -80,10 +75,10 @@ Return JSON errors with proper HTTP status and a message field:
 { "message": "Validation failed", "errors": { "field": ["error"] } }
 ```
 
-esta feito como sucsses and error
-```
-{
-            'success': False,
-            'error': 'Internal server error'
-        }
-```
+
+## Auth Notes
+- put the error in the right format
+- need to add a way to send the information to the front-end renders the image, the process in not in the same local
+- Prefer `django-rest-framework` + `djangorestframework-simplejwt` or equivalent.
+- Login returns an access token; the frontend stores it only in `localStorage` right now.
+- All protected endpoints should require `Authorization: Bearer <token>`.
