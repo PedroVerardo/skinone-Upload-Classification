@@ -242,6 +242,7 @@ def register_user(request):
         email = data.get('email', '').strip().lower()
         password = data.get('password', '')
         coren = data.get('coren', '').strip()
+        specialty = data.get('specialty', '').strip()
         
         # Validate required fields
         if not name or not email or not password:
@@ -252,6 +253,8 @@ def register_user(request):
                 errors['email'] = ['Email is required']
             if not password:
                 errors['password'] = ['Password is required']
+            if not specialty:
+                errors['specialty'] = ['Specialty is required']
             
             return JsonResponse({
                 'message': 'Validation failed',
