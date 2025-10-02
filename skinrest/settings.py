@@ -37,12 +37,16 @@ INSTALLED_APPS = [
     'django.contrib.sessions',
     'django.contrib.messages',
     'django.contrib.staticfiles',
+    'corsheaders',
     'users.apps.UsersConfig',
     'images.apps.ImagesConfig',
     'classification.apps.ClassificationConfig',
+    'drf_spectacular',
+    'rest_framework',
 ]
 
 MIDDLEWARE = [
+    'corsheaders.middleware.CorsMiddleware',
     'django.middleware.security.SecurityMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
@@ -69,6 +73,68 @@ TEMPLATES = [
         },
     },
 ]
+
+REST_FRAMEWORK = {
+    'DEFAULT_SCHEMA_CLASS': 'drf_spectacular.openapi.AutoSchema',
+}
+
+SPECTACULAR_SETTINGS = {
+    'TITLE': 'SkinRest API',
+    'DESCRIPTION': 'API for the SkinRest project',
+    'VERSION': '1.0.0',
+    'SERVE_INCLUDE_SCHEMA': False,
+    'SERVERS': [
+        {'url': '/', 'description': 'Default'},
+    ],
+    'AUTHENTICATION_WHITELIST': [],
+    'COMPONENT_SPLIT_REQUEST': True,
+    'SECURITY': [
+        {'BearerAuth': []},
+    ],
+    'COMPONENTS': {
+        'securitySchemes': {
+            'BearerAuth': {
+                'type': 'http',
+                'scheme': 'bearer',
+                'bearerFormat': 'JWT',
+            }
+        }
+    },
+}
+
+# CORS configuration (allow frontend dev origin)
+CORS_ALLOWED_ORIGINS = [
+    'http://localhost:8080',
+    'http://127.0.0.1:8080',
+    'https://<prod-domain>',
+]
+
+# Restrict allowed CORS methods
+CORS_ALLOW_METHODS = [
+    'GET',
+    'POST',
+    'PUT',
+    'DELETE',
+    'OPTIONS',
+]
+
+# Restrict allowed CORS headers
+CORS_ALLOW_HEADERS = [
+    'authorization',
+    'content-type',
+]
+
+# Allow cross-site requests from trusted frontends (for CSRF origin check)
+CSRF_TRUSTED_ORIGINS = [
+    'http://localhost:8080',
+    'http://127.0.0.1:8080',
+    'http://localhost',
+    'http://127.0.0.1',
+    'https://<prod-domain>',
+]
+
+# Allow CORS for Swagger UI served locally (optional)
+# You can remove or extend as needed
 
 WSGI_APPLICATION = 'skinrest.wsgi.application'
 

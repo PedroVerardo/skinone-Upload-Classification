@@ -6,6 +6,7 @@ from django.shortcuts import render
 from django.http import JsonResponse
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_http_methods
+from rest_framework.decorators import api_view
 from django.conf import settings
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth import get_user_model
@@ -14,6 +15,8 @@ from .models import Image
 import json
 import logging
 from functools import wraps
+from rest_framework import serializers
+from drf_spectacular.utils import extend_schema, OpenApiResponse
 
 logger = logging.getLogger(__name__)
 User = get_user_model()
@@ -976,7 +979,34 @@ def _handle_json_upload_with_classification(request):
 
 # New views matching API specification exactly
 
-@require_http_methods(["GET"])
+class ImageListItemSerializer(serializers.Serializer):
+    id = serializers.IntegerField()
+    url = serializers.CharField(allow_null=True)
+
+class UploadBatchResponseItemSerializer(serializers.Serializer):
+    id = serializers.IntegerField()
+    url = serializers.CharField()
+    status = serializers.CharField()
+
+class UploadBatchResponseSerializer(serializers.Serializer):
+    upload_batch_id = serializers.CharField()
+    uploaded = UploadBatchResponseItemSerializer(many=True)
+
+class UploadSingleResponseSerializer(serializers.Serializer):
+    image = serializers.DictField()
+
+class UploadSingleRequestSerializer(serializers.Serializer):
+    image = serializers.FileField()
+
+class UploadBatchRequestSerializer(serializers.Serializer):
+    images = serializers.ListField(child=serializers.FileField())
+
+@extend_schema(
+    tags=["Images"],
+    summary="List images",
+    responses={200: ImageListItemSerializer(many=True), 500: OpenApiResponse(description='Internal server error')},
+)
+@api_view(["GET"])
 @jwt_required
 def list_images(request):
     """
@@ -1004,8 +1034,14 @@ def list_images(request):
             'message': 'Internal server error'
         }, status=500)
 
+@extend_schema(
+    tags=["Images"],
+    summary="Upload images (batch)",
+    request=UploadBatchRequestSerializer,
+    responses={201: UploadBatchResponseSerializer, 400: OpenApiResponse(description='Bad request'), 500: OpenApiResponse(description='Internal server error')},
+)
+@api_view(["POST"])
 @csrf_exempt
-@require_http_methods(["POST"])
 @jwt_required
 def upload_batch_images(request):
     """
@@ -1090,8 +1126,14 @@ def upload_batch_images(request):
             'message': 'Internal server error'
         }, status=500)
 
+@extend_schema(
+    tags=["Images"],
+    summary="Upload single image",
+    request=UploadSingleRequestSerializer,
+    responses={201: UploadSingleResponseSerializer, 400: OpenApiResponse(description='Bad request'), 500: OpenApiResponse(description='Internal server error')},
+)
+@api_view(["POST"])
 @csrf_exempt
-@require_http_methods(["POST"])
 @jwt_required
 def upload_single_image(request):
     """
@@ -1166,8 +1208,14 @@ def upload_single_image(request):
             'message': 'Internal server error'
         }, status=500)
 
+@extend_schema(
+    tags=["Images"],
+    summary="Upload images with stage",
+    request=UploadBatchRequestSerializer,
+    responses={201: UploadBatchResponseSerializer, 400: OpenApiResponse(description='Bad request'), 500: OpenApiResponse(description='Internal server error')},
+)
+@api_view(["POST"])
 @csrf_exempt
-@require_http_methods(["POST"])
 @jwt_required
 def upload_with_stage(request):
     """

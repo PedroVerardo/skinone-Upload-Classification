@@ -3,9 +3,13 @@ from django.shortcuts import render
 from django.contrib.auth import authenticate
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_http_methods
+from rest_framework.decorators import api_view, authentication_classes, permission_classes
+from rest_framework.permissions import AllowAny
 from django.contrib.auth.hashers import check_password
 from django.core.validators import validate_email
 from django.core.exceptions import ValidationError
+from rest_framework import serializers
+from drf_spectacular.utils import extend_schema, OpenApiResponse
 from google.oauth2 import id_token
 from google.auth.transport import requests
 from django.conf import settings
@@ -25,6 +29,34 @@ except ImportError:
 from .models import User
 
 logger = logging.getLogger(__name__)
+
+class UserResponseSerializer(serializers.Serializer):
+    id = serializers.IntegerField()
+    name = serializers.CharField()
+    email = serializers.EmailField()
+
+class RegisterUserRequestSerializer(serializers.Serializer):
+    name = serializers.CharField()
+    email = serializers.EmailField()
+    password = serializers.CharField()
+    coren = serializers.CharField(required=False, allow_blank=True)
+    specialty = serializers.CharField(required=False, allow_blank=True)
+    institution = serializers.CharField(required=False, allow_blank=True)
+
+class LoginRequestSerializer(serializers.Serializer):
+    email = serializers.EmailField()
+    password = serializers.CharField()
+
+class LoginResponseSerializer(serializers.Serializer):
+    token = serializers.CharField()
+    user = UserResponseSerializer()
+
+class VerifyTokenRequestSerializer(serializers.Serializer):
+    token = serializers.CharField()
+
+class VerifyTokenResponseSerializer(serializers.Serializer):
+    message = serializers.CharField()
+    user = serializers.DictField(required=False)
 
 def validate_email_format(email):
     if not email:
@@ -228,8 +260,23 @@ def get_all_users(request):
             'error': 'Internal server error'
         }, status=500)
 
+
+
+@extend_schema(
+    tags=["Auth"],
+    summary="Register a new user",
+    request=RegisterUserRequestSerializer,
+    auth=[],
+    responses={
+        201: UserResponseSerializer,
+        400: OpenApiResponse(description='Validation failed'),
+        500: OpenApiResponse(description='Internal server error'),
+    },
+)
 @csrf_exempt
-@require_http_methods(["POST"])
+@api_view(["POST"])
+@authentication_classes([])
+@permission_classes([AllowAny])
 def register_user(request):
     """
     Register a new user
@@ -261,7 +308,8 @@ def register_user(request):
                 'errors': errors
             }, status=400)
         # Validate email format
-        email_valid, email_error = validate_email_format(email)
+        #email_valid, email_error = validate_email_format(email)
+        '''
         if not email_valid:
             return JsonResponse({
                 'message': 'Validation failed',
@@ -269,7 +317,9 @@ def register_user(request):
                     'email': [email_error]
                 }
             }, status=400)
+        '''
         
+        '''
         # Validate password strength
         password_valid, password_error = validate_password_strength(password)
         if not password_valid:
@@ -279,6 +329,7 @@ def register_user(request):
                     'password': [password_error]
                 }
             }, status=400)
+        '''
         
         # Check if user already exists
         if User.objects.filter(email=email).exists():
@@ -316,8 +367,22 @@ def register_user(request):
             'error': 'Internal server error'
         }, status=500)
 
+@extend_schema(
+    tags=["Auth"],
+    summary="Login with email and password",
+    request=LoginRequestSerializer,
+    auth=[],
+    responses={
+        200: LoginResponseSerializer,
+        400: OpenApiResponse(description='Validation failed'),
+        401: OpenApiResponse(description='Invalid credentials'),
+        500: OpenApiResponse(description='Internal server error'),
+    },
+)
 @csrf_exempt
-@require_http_methods(["POST"])
+@api_view(["POST"])
+@authentication_classes([])
+@permission_classes([AllowAny])
 def login_user(request):
     """
     Login user and return JWT token
@@ -328,6 +393,8 @@ def login_user(request):
         data = json.loads(request.body)
         email = data.get('email', '').strip().lower()
         password = data.get('password', '')
+        
+        print(data)
         
         if not email or not password:
             return JsonResponse({
@@ -386,8 +453,22 @@ def login_user(request):
             'message': 'Internal server error'
         }, status=500)
 
+@extend_schema(
+    tags=["Auth"],
+    summary="Verify JWT token",
+    request=VerifyTokenRequestSerializer,
+    auth=[],
+    responses={
+        200: VerifyTokenResponseSerializer,
+        400: OpenApiResponse(description='Token is required / Invalid JSON'),
+        401: OpenApiResponse(description='Invalid or expired token'),
+        500: OpenApiResponse(description='Internal server error'),
+    },
+)
 @csrf_exempt
-@require_http_methods(["POST"])
+@api_view(["POST"])
+@authentication_classes([])
+@permission_classes([AllowAny])
 def verify_token(request):
     """
     Verify if a JWT token is valid

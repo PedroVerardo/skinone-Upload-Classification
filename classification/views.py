@@ -5,10 +5,13 @@ from django.shortcuts import render
 from django.http import JsonResponse
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_http_methods
+from rest_framework.decorators import api_view
 from django.contrib.auth import get_user_model
 from django.core.paginator import Paginator
 from .models import Classification
 from images.models import Image
+from rest_framework import serializers
+from drf_spectacular.utils import extend_schema, OpenApiResponse
 
 logger = logging.getLogger(__name__)
 User = get_user_model()
@@ -59,8 +62,37 @@ def jwt_required(f):
         return f(request, *args, **kwargs)
     return decorated_function
 
+class CreateClassificationRequestSerializer(serializers.Serializer):
+    image_id = serializers.IntegerField()
+    stage = serializers.ChoiceField(choices=[c[0] for c in Classification.CLASSIFICATION_CHOICES])
+    observations = serializers.CharField(required=False, allow_blank=True)
+
+class CreateClassificationResponseSerializer(serializers.Serializer):
+    id = serializers.IntegerField()
+    image_id = serializers.CharField()
+    stage = serializers.CharField()
+    created_at = serializers.CharField()
+
+class ClassificationListItemSerializer(serializers.Serializer):
+    id = serializers.IntegerField()
+    image_id = serializers.CharField()
+    stage = serializers.CharField()
+    created_at = serializers.CharField()
+
+@extend_schema(
+    tags=["Classification"],
+    summary="Create or list classifications",
+    request=CreateClassificationRequestSerializer,
+    responses={
+        201: CreateClassificationResponseSerializer,
+        200: ClassificationListItemSerializer(many=True),
+        400: OpenApiResponse(description='Validation failed'),
+        404: OpenApiResponse(description='Image not found'),
+        500: OpenApiResponse(description='Internal server error'),
+    },
+)
+@api_view(["POST", "GET"])
 @csrf_exempt
-@require_http_methods(["POST", "GET"])
 @jwt_required
 def create_classification(request):
     """

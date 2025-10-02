@@ -1,0 +1,543 @@
+openapi: 3.0.3
+info:
+  title: SkinRest API
+  version: 1.0.0
+  description: API for the SkinRest project
+paths:
+  /auth/login/:
+    post:
+      operationId: auth_login_create
+      description: |-
+        Login user and return JWT token
+        Expected JSON: { email, password }
+        Response: 200 OK, { token, user: { id, name, email } }
+      summary: Login with email and password
+      tags:
+      - Auth
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoginRequestRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/LoginRequestRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/LoginRequestRequest'
+        required: true
+      security:
+      - BearerAuth: []
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LoginResponse'
+          description: ''
+        '400':
+          description: Validation failed
+        '401':
+          description: Invalid credentials
+        '500':
+          description: Internal server error
+  /auth/register/:
+    post:
+      operationId: auth_register_create
+      description: |-
+        Register a new user
+        Expected JSON: { name, email, password, coren, specialty, institution }
+        Response: 201 Created, { id, name, email }
+      summary: Register a new user
+      tags:
+      - Auth
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RegisterUserRequestRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/RegisterUserRequestRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/RegisterUserRequestRequest'
+        required: true
+      security:
+      - BearerAuth: []
+      - {}
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserResponse'
+          description: ''
+        '400':
+          description: Validation failed
+        '500':
+          description: Internal server error
+  /auth/verify-token/:
+    post:
+      operationId: auth_verify_token_create
+      description: |-
+        Verify if a JWT token is valid
+        Expected JSON: {"token": "jwt_token_here"}
+      summary: Verify JWT token
+      tags:
+      - Auth
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/VerifyTokenRequestRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/VerifyTokenRequestRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/VerifyTokenRequestRequest'
+        required: true
+      security:
+      - BearerAuth: []
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VerifyTokenResponse'
+          description: ''
+        '400':
+          description: Token is required / Invalid JSON
+        '401':
+          description: Invalid or expired token
+        '500':
+          description: Internal server error
+  /classifications/:
+    get:
+      operationId: classifications_list
+      description: |-
+        POST /classifications/
+        Auth required
+        Request: { image_id: string, stage: "estagio1"|"estagio2"|"estagio3"|"estagio4"|"nao_classificavel"|"dtpi", observations?: string }
+        Response: 201 Created, { id, image_id, stage, created_at }
+      summary: Create or list classifications
+      tags:
+      - Classification
+      security:
+      - BearerAuth: []
+      - {}
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CreateClassificationResponse'
+          description: ''
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ClassificationListItem'
+          description: ''
+        '400':
+          description: Validation failed
+        '404':
+          description: Image not found
+        '500':
+          description: Internal server error
+    post:
+      operationId: classifications_create
+      description: |-
+        POST /classifications/
+        Auth required
+        Request: { image_id: string, stage: "estagio1"|"estagio2"|"estagio3"|"estagio4"|"nao_classificavel"|"dtpi", observations?: string }
+        Response: 201 Created, { id, image_id, stage, created_at }
+      summary: Create or list classifications
+      tags:
+      - Classification
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateClassificationRequestRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/CreateClassificationRequestRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/CreateClassificationRequestRequest'
+        required: true
+      security:
+      - BearerAuth: []
+      - {}
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CreateClassificationResponse'
+          description: ''
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ClassificationListItem'
+          description: ''
+        '400':
+          description: Validation failed
+        '404':
+          description: Image not found
+        '500':
+          description: Internal server error
+  /images/:
+    get:
+      operationId: images_list
+      description: |-
+        GET /images/
+        Auth required
+        Response: 200 OK, [ { id, url } ]
+      summary: List images
+      tags:
+      - Images
+      security:
+      - BearerAuth: []
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ImageListItem'
+          description: ''
+        '500':
+          description: Internal server error
+  /images/upload/:
+    post:
+      operationId: images_upload_create
+      description: |-
+        POST /images/upload/
+        Auth required
+        Multipart form
+        Field: images (repeatable) -> multiple files allowed
+        Response: 201 Created, { upload_batch_id, uploaded }
+      summary: Upload images (batch)
+      tags:
+      - Images
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UploadBatchRequestRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/UploadBatchRequestRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/UploadBatchRequestRequest'
+        required: true
+      security:
+      - BearerAuth: []
+      - {}
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UploadBatchResponse'
+          description: ''
+        '400':
+          description: Bad request
+        '500':
+          description: Internal server error
+  /images/upload/single/:
+    post:
+      operationId: images_upload_single_create
+      description: |-
+        POST /images/upload/single/
+        Auth required
+        Multipart form
+        Field: image
+        Response: 201 Created, { image: { id, url } }
+      summary: Upload single image
+      tags:
+      - Images
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UploadSingleRequestRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/UploadSingleRequestRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/UploadSingleRequestRequest'
+        required: true
+      security:
+      - BearerAuth: []
+      - {}
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UploadSingleResponse'
+          description: ''
+        '400':
+          description: Bad request
+        '500':
+          description: Internal server error
+  /images/upload/with-stage/:
+    post:
+      operationId: images_upload_with_stage_create
+      description: |-
+        POST /images/upload/with-stage/?stage=<estagio>
+        Auth required
+        Multipart form
+        Field: images (repeatable)
+        Query param: stage: "estagio1"|"estagio2"|"estagio3"|"estagio4"|"nao_classificavel"|"dtpi"
+        Efeito: cria imagens e já registra classificação para cada uma
+        Response: 201 Created, { upload_batch_id, uploaded, stage, classified }
+      summary: Upload images with stage
+      tags:
+      - Images
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UploadBatchRequestRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/UploadBatchRequestRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/UploadBatchRequestRequest'
+        required: true
+      security:
+      - BearerAuth: []
+      - {}
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UploadBatchResponse'
+          description: ''
+        '400':
+          description: Bad request
+        '500':
+          description: Internal server error
+components:
+  schemas:
+    ClassificationListItem:
+      type: object
+      properties:
+        id:
+          type: integer
+        image_id:
+          type: string
+        stage:
+          type: string
+        created_at:
+          type: string
+      required:
+      - created_at
+      - id
+      - image_id
+      - stage
+    CreateClassificationRequestRequest:
+      type: object
+      properties:
+        image_id:
+          type: integer
+        stage:
+          $ref: '#/components/schemas/StageEnum'
+        observations:
+          type: string
+      required:
+      - image_id
+      - stage
+    CreateClassificationResponse:
+      type: object
+      properties:
+        id:
+          type: integer
+        image_id:
+          type: string
+        stage:
+          type: string
+        created_at:
+          type: string
+      required:
+      - created_at
+      - id
+      - image_id
+      - stage
+    ImageListItem:
+      type: object
+      properties:
+        id:
+          type: integer
+        url:
+          type: string
+          nullable: true
+      required:
+      - id
+      - url
+    LoginRequestRequest:
+      type: object
+      properties:
+        email:
+          type: string
+          format: email
+          minLength: 1
+        password:
+          type: string
+          minLength: 1
+      required:
+      - email
+      - password
+    LoginResponse:
+      type: object
+      properties:
+        token:
+          type: string
+        user:
+          $ref: '#/components/schemas/UserResponse'
+      required:
+      - token
+      - user
+    RegisterUserRequestRequest:
+      type: object
+      properties:
+        name:
+          type: string
+          minLength: 1
+        email:
+          type: string
+          format: email
+          minLength: 1
+        password:
+          type: string
+          minLength: 1
+        coren:
+          type: string
+        specialty:
+          type: string
+        institution:
+          type: string
+      required:
+      - email
+      - name
+      - password
+    StageEnum:
+      enum:
+      - stage1
+      - stage2
+      - stage3
+      - stage4
+      - not_classifiable
+      - dtpi
+      type: string
+      description: |-
+        * `stage1` - stage1
+        * `stage2` - stage2
+        * `stage3` - stage3
+        * `stage4` - stage4
+        * `not_classifiable` - not_classifiable
+        * `dtpi` - dtpi
+    UploadBatchRequestRequest:
+      type: object
+      properties:
+        images:
+          type: array
+          items:
+            type: string
+            format: binary
+      required:
+      - images
+    UploadBatchResponse:
+      type: object
+      properties:
+        upload_batch_id:
+          type: string
+        uploaded:
+          type: array
+          items:
+            $ref: '#/components/schemas/UploadBatchResponseItem'
+      required:
+      - upload_batch_id
+      - uploaded
+    UploadBatchResponseItem:
+      type: object
+      properties:
+        id:
+          type: integer
+        url:
+          type: string
+        status:
+          type: string
+      required:
+      - id
+      - status
+      - url
+    UploadSingleRequestRequest:
+      type: object
+      properties:
+        image:
+          type: string
+          format: binary
+      required:
+      - image
+    UploadSingleResponse:
+      type: object
+      properties:
+        image:
+          type: object
+          additionalProperties: {}
+      required:
+      - image
+    UserResponse:
+      type: object
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        email:
+          type: string
+          format: email
+      required:
+      - email
+      - id
+      - name
+    VerifyTokenRequestRequest:
+      type: object
+      properties:
+        token:
+          type: string
+          minLength: 1
+      required:
+      - token
+    VerifyTokenResponse:
+      type: object
+      properties:
+        message:
+          type: string
+        user:
+          type: object
+          additionalProperties: {}
+      required:
+      - message
+servers:
+- url: /
+  description: Default
