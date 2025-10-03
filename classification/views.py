@@ -6,7 +6,8 @@ from django.conf import settings
 from django.http import JsonResponse
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_http_methods
-from rest_framework.decorators import api_view
+from rest_framework.decorators import api_view, authentication_classes, permission_classes
+from rest_framework.permissions import AllowAny
 from django.contrib.auth import get_user_model
 from django.core.paginator import Paginator
 from .models import Classification
@@ -14,6 +15,7 @@ from images.models import Image
 from rest_framework import serializers
 from drf_spectacular.utils import extend_schema, OpenApiResponse
 from django.db.models import Count, OuterRef, Subquery, IntegerField
+from django.db.models.functions import Coalesce
 
 logger = logging.getLogger(__name__)
 User = get_user_model()
@@ -94,6 +96,8 @@ class ClassificationListItemSerializer(serializers.Serializer):
     },
 )
 @api_view(["POST", "GET"])
+@authentication_classes([])  # disable SessionAuthentication to avoid CSRF
+@permission_classes([AllowAny])
 @csrf_exempt
 @jwt_required
 def create_classification(request):
@@ -451,20 +455,27 @@ def get_classification_images(request):
         # Base queryset: images not classified by this user
         qs = (
             Image.objects.exclude(id__in=classified_by_user)
-            .annotate(total_classifications=Subquery(total_classifications_subq, output_field=IntegerField()))
+            .annotate(
+                total_classifications=Coalesce(
+                    Subquery(total_classifications_subq, output_field=IntegerField()),
+                    0,
+                )
+            )
             .order_by('total_classifications', 'uploaded_at')
         )
 
         # Limit to 30 images
         images = list(qs[:30])
 
-        data = [
-            {
+        data = []
+        for img in images:
+            # Build absolute URL to media file
+            relative_url = f"{settings.MEDIA_URL}{img.file_path}" if img.file_path else None
+            absolute_url = request.build_absolute_uri(relative_url) if relative_url else None
+            data.append({
                 'id': img.id,
-                'url': f"{settings.MEDIA_URL}{img.file_path}" if img.file_path else None,
-            }
-            for img in images
-        ]
+                'url': absolute_url,
+            })
 
         return JsonResponse(data, safe=False, status=200)
 

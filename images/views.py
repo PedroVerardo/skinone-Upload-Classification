@@ -6,8 +6,9 @@ from django.shortcuts import render
 from django.http import JsonResponse
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_http_methods
-from rest_framework.decorators import api_view, parser_classes
+from rest_framework.decorators import api_view, parser_classes, authentication_classes, permission_classes
 from rest_framework.parsers import MultiPartParser, FormParser
+from rest_framework.permissions import AllowAny
 from django.conf import settings
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth import get_user_model
@@ -1046,6 +1047,8 @@ def list_images(request):
 )
 @api_view(["POST"])
 @parser_classes([MultiPartParser, FormParser])
+@authentication_classes([])
+@permission_classes([AllowAny])
 @jwt_required
 def upload_batch_images(request):
     """
@@ -1142,6 +1145,8 @@ def upload_batch_images(request):
 )
 @api_view(["POST"])
 @parser_classes([MultiPartParser, FormParser])
+@authentication_classes([])
+@permission_classes([AllowAny])
 @jwt_required
 def upload_single_image(request):
     """
@@ -1228,6 +1233,8 @@ def upload_single_image(request):
 )
 @api_view(["POST"])
 @parser_classes([MultiPartParser, FormParser])
+@authentication_classes([])
+@permission_classes([AllowAny])
 def upload_with_stage(request):
     """
     POST /images/upload/with-stage/?stage=<estagio>
