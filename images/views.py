@@ -463,7 +463,6 @@ def upload_batch_base64_images(request):
                 'error': 'No images data provided'
             }, status=400)
         
-        # Validate number of images (max 20 per batch)
         if len(images_data) > 20:
             return JsonResponse({
                 'success': False,
@@ -566,6 +565,38 @@ def upload_batch_base64_images(request):
             'success': False,
             'error': 'Internal server error'
         }, status=500)
+
+@require_http_methods(["GET"])
+def get_image_info(request, image_id):
+    try:
+        image = Image.objects.get(id=image_id)
+        
+        return JsonResponse({
+            'success': True,
+            'image': {
+                'id': image.id,
+                'file_path': image.file_path,
+                'base64_data': image.base64_data,
+                'file_hash': image.file_hash,
+                'original_filename': image.original_filename,
+                'file_size': image.file_size,
+                'uploaded_at': image.uploaded_at.isoformat(),
+                'uploaded_by': image.uploaded_by.email if image.uploaded_by else None
+            }
+        })
+        
+    except Image.DoesNotExist:
+        return JsonResponse({
+            'success': False,
+            'error': 'Image not found'
+        }, status=404)
+    except Exception as e:
+        logger.error(f"Error getting image info: {str(e)}")
+        return JsonResponse({
+            'success': False,
+            'error': 'Internal server error'
+        }, status=500)
+    
 
 @require_http_methods(["GET"])
 def get_image_info(request, image_id):

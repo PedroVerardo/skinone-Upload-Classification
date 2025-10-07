@@ -4,6 +4,7 @@ from django.conf import settings
 # Create your models here.
 class Image(models.Model):
     file_path = models.CharField(max_length=500)
+    base64_data = models.TextField()
     file_hash = models.CharField(max_length=64, unique=True, null=True, blank=True, help_text="SHA256 hash of the file for uniqueness")
     original_filename = models.CharField(max_length=255, null=True, blank=True, help_text="Original filename of the uploaded file")
     description = models.TextField(blank=True, null=True, help_text="Description of the image")
